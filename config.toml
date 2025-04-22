@@ -1,0 +1,21 @@
+[ssh]
+host = "localhost"
+port = 22000
+user = "agent"
+timeout = "30s"
+keyfile = "/Users/ricardolanziano/.ssh/id_ed25519"
+
+[application]
+port = 8080
+hostname = "pto.example.com"
+
+[agent]
+[agent.tags]
+service = "pto-us"
+version = "v1.2.3"
+environment = "production"
+region = "us-east-1"
+
+[logging]
+level = "info"
+logfile = "/Users/ricardolanziano/cortex_agent.log"

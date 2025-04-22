@@ -1,0 +1,8 @@
+/bin/
+/cortex_agent
+*.log
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
