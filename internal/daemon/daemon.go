@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	"erlang-solutions.com/cortex_agent/internal/i18n"
 )
 
 func WritePidFile() error {
@@ -25,6 +27,10 @@ func WritePidFile() error {
 		return fmt.Errorf("failed to write PID file: %w", err)
 	}
 
-	log.Printf("PID file written to %s with PID %d", pidPath, pid)
+	log.Printf(i18n.Tf("pid_file_written", nil),
+		i18n.T("pid_file_written", map[string]interface{}{
+			"Path": pidPath,
+			"PID":  pid,
+		}))
 	return nil
 }

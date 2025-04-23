@@ -8,6 +8,7 @@ import (
 
 	"erlang-solutions.com/cortex_agent/internal/app"
 	"erlang-solutions.com/cortex_agent/internal/daemon"
+	"erlang-solutions.com/cortex_agent/internal/i18n"
 )
 
 var (
@@ -21,10 +22,13 @@ func main() {
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
-	// Write PID file if requested
+	if err := i18n.InitDefaultFS(); err != nil {
+		log.Printf(i18n.Tf("i18n_init_error", nil), i18n.T("i18n_init_error", map[string]interface{}{"Error": err}))
+	}
+
 	if *writePid {
 		if err := daemon.WritePidFile(); err != nil {
-			log.Printf("Warning: Failed to write PID file: %v", err)
+			log.Printf(i18n.Tf("pid_file_error", nil), i18n.T("pid_file_error", map[string]interface{}{"Error": err}))
 		}
 	}
 
@@ -34,13 +38,12 @@ func main() {
 	// Setup signal handling for graceful shutdown
 	app.SetupTerminationHandler(ctx, cancel)
 
-	// Run the application
 	application := app.New(*configFile, *jsonMode)
 	if err := application.Run(ctx); err != nil {
 		if errors.Is(err, context.Canceled) {
-			log.Println("Application terminated due to context cancellation")
+			log.Println(i18n.T("app_context_terminated", nil))
 		} else {
-			log.Fatalf("Application error: %v", err)
+			log.Fatalf(i18n.Tf("app_error", nil), i18n.T("app_error", map[string]interface{}{"Error": err}))
 		}
 	}
 }

@@ -13,6 +13,7 @@ passing.
 - Support for dynamic configuration reloading via SIGHUP
 - Graceful connection handling and reconnection capabilities
 - JSON protocol support for integration with external applications
+- Internationalization (i18n) support with multiple languages
 
 ## Installation
 
@@ -67,6 +68,8 @@ To get started with development:
 │   ├── app/                # Core application logic
 │   ├── config/             # Configuration handling
 │   ├── daemon/             # Background process functionality
+│   ├── i18n/               # Internationalization support
+│   │   └── locales/        # Translation files
 │   ├── protocol/           # Communication protocol implementation
 │   └── ssh/                # SSH connection management
 ├── pkg/
@@ -110,6 +113,9 @@ After building, you can run the agent:
 ```bash
 # Run with custom config, otherwise config.toml must be in the same directory
 ./bin/cortex_agent -config=/path/to/config.toml
+
+# Run with Spanish translations
+LANG=es_ES.UTF-8 ./bin/cortex_agent
 
 # Run in background using standard Unix commands
 nohup ./bin/cortex_agent -pid > /dev/null 2>&1 &
@@ -178,6 +184,7 @@ The codebase is organized in layers:
 - `internal/daemon`: PID file management
 - `internal/protocol`: Protocol handlers (JSON and standard modes)
 - `internal/ssh`: SSH connection management
+- `internal/i18n`: Internationalization support
 - `pkg/errors`: Common error types and utilities
 
 ### Design Principles
@@ -195,6 +202,8 @@ The code follows these key design principles:
 
 - `github.com/BurntSushi/toml` - For parsing TOML configuration files
 - `golang.org/x/crypto/ssh` - For SSH client functionality
+- `github.com/nicksnyder/go-i18n/v2` - For internationalization support
+- `golang.org/x/text` - For language identification and text processing
 
 ## License
 

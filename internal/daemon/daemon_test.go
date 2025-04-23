@@ -8,7 +8,6 @@ import (
 )
 
 func TestPidFileCreation(t *testing.T) {
-	// Create a temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "daemon-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -19,7 +18,6 @@ func TestPidFileCreation(t *testing.T) {
 		}
 	}()
 
-	// Create a test PID file in the test directory
 	pidDir := filepath.Join(tmpDir, ".cortex_agent")
 	if err := os.MkdirAll(pidDir, 0755); err != nil {
 		t.Fatalf("Failed to create PID directory: %v", err)
@@ -30,7 +28,6 @@ func TestPidFileCreation(t *testing.T) {
 		t.Fatalf("Failed to write test PID file: %v", err)
 	}
 
-	// Verify the PID file exists and contains the correct PID
 	content, err := os.ReadFile(pidPath)
 	if err != nil {
 		t.Fatalf("Failed to read PID file: %v", err)

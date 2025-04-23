@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
+	"erlang-solutions.com/cortex_agent/internal/i18n"
 )
 
 func SetupTerminationHandler(ctx context.Context, cancel context.CancelFunc) {
@@ -17,13 +18,13 @@ func SetupTerminationHandler(ctx context.Context, cancel context.CancelFunc) {
 
 	go func() {
 		<-termCh
-		log.Println("Termination signal received, shutting down...")
+		log.Println(i18n.T("termination_signal", nil))
 		cancel()
 
 		// Set a timeout for graceful shutdown
 		go func() {
 			time.Sleep(5 * time.Second)
-			log.Println("Forced exit after timeout")
+			log.Println(i18n.T("forced_exit", nil))
 			os.Exit(1)
 		}()
 	}()
@@ -39,11 +40,11 @@ func SetupConfigReloader(ctx context.Context, configFile string, cfg *config.Con
 			case <-ctx.Done():
 				return
 			case <-sighupCh:
-				log.Println("SIGHUP received, reloading configuration...")
+				log.Println(i18n.T("sighup_received", nil))
 
 				newConfig, err := config.Load(configFile)
 				if err != nil {
-					log.Printf("Failed to reload configuration: %v", err)
+					log.Printf(i18n.Tf("config_reload_error", nil), i18n.T("config_reload_error", map[string]interface{}{"Error": err}))
 					continue
 				}
 
