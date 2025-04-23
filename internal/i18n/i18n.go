@@ -124,26 +124,22 @@ func Tp(messageID string, pluralCount interface{}, templateData map[string]inter
 }
 
 func DetectLanguage() string {
-	lang := os.Getenv("LANG")
-	if lang != "" {
-		// LANG format is usually like "en_US.UTF-8"
-		parts := strings.Split(lang, "_")
-		if len(parts) > 0 && parts[0] != "" {
-			return parts[0]
-		}
-	}
+	envVars := []string{"LANG", "LC_ALL", "LC_MESSAGES", "LANGUAGE"}
 
-	envVars := []string{"LC_ALL", "LC_MESSAGES", "LANGUAGE"}
 	for _, env := range envVars {
-		lang = os.Getenv(env)
-		if lang != "" {
-			parts := strings.Split(lang, ":")
-			if len(parts) > 0 {
-				subParts := strings.Split(parts[0], "_")
-				if len(subParts) > 0 && subParts[0] != "" {
-					return subParts[0]
-				}
-			}
+		lang := os.Getenv(env)
+		if lang == "" {
+			continue
+		}
+
+		parts := strings.Split(lang, ":")
+		if len(parts) == 0 || parts[0] == "" {
+			continue
+		}
+
+		subParts := strings.Split(parts[0], "_")
+		if len(subParts) > 0 && subParts[0] != "" {
+			return subParts[0]
 		}
 	}
 

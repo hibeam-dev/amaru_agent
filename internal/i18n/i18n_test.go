@@ -6,33 +6,80 @@ import (
 )
 
 func TestDetectLanguage(t *testing.T) {
-	origLang := os.Getenv("LANG")
-	origLCAll := os.Getenv("LC_ALL")
+	origEnv := map[string]string{
+		"LANG":        os.Getenv("LANG"),
+		"LC_ALL":      os.Getenv("LC_ALL"),
+		"LC_MESSAGES": os.Getenv("LC_MESSAGES"),
+		"LANGUAGE":    os.Getenv("LANGUAGE"),
+	}
 
 	defer func() {
-		_ = os.Setenv("LANG", origLang)
-		_ = os.Setenv("LC_ALL", origLCAll)
+		for key, val := range origEnv {
+			_ = os.Setenv(key, val)
+		}
 	}()
 
-	_ = os.Setenv("LANG", "es_ES.UTF-8")
-	_ = os.Setenv("LC_ALL", "")
-	lang := DetectLanguage()
-	if lang != "es" {
-		t.Errorf("Expected 'es' from LANG, got '%s'", lang)
+	clearEnvVars := func() {
+		for key := range origEnv {
+			_ = os.Setenv(key, "")
+		}
 	}
 
-	_ = os.Setenv("LANG", "")
-	_ = os.Setenv("LC_ALL", "fr_FR.UTF-8")
-	lang = DetectLanguage()
-	if lang != "fr" {
-		t.Errorf("Expected 'fr' from LC_ALL, got '%s'", lang)
+	tests := []struct {
+		name     string
+		envSetup map[string]string
+		want     string
+	}{
+		{
+			name:     "LANG variable",
+			envSetup: map[string]string{"LANG": "es_ES.UTF-8"},
+			want:     "es",
+		},
+		{
+			name:     "LC_ALL variable",
+			envSetup: map[string]string{"LC_ALL": "fr_FR.UTF-8"},
+			want:     "fr",
+		},
+		{
+			name:     "LC_MESSAGES variable",
+			envSetup: map[string]string{"LC_MESSAGES": "de_DE.UTF-8"},
+			want:     "de",
+		},
+		{
+			name:     "LANGUAGE variable",
+			envSetup: map[string]string{"LANGUAGE": "it_IT:en_US:en"},
+			want:     "it",
+		},
+		{
+			name:     "LANGUAGE variable with colon syntax",
+			envSetup: map[string]string{"LANGUAGE": "pt_BR:pt:en"},
+			want:     "pt",
+		},
+		{
+			name:     "Variable precedence (LANG over LC_ALL)",
+			envSetup: map[string]string{"LANG": "es_ES.UTF-8", "LC_ALL": "fr_FR.UTF-8"},
+			want:     "es",
+		},
+		{
+			name:     "No language set",
+			envSetup: map[string]string{},
+			want:     DefaultLanguage,
+		},
 	}
 
-	_ = os.Setenv("LANG", "")
-	_ = os.Setenv("LC_ALL", "")
-	lang = DetectLanguage()
-	if lang != DefaultLanguage {
-		t.Errorf("Expected default language '%s', got '%s'", DefaultLanguage, lang)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearEnvVars()
+
+			for key, val := range tt.envSetup {
+				_ = os.Setenv(key, val)
+			}
+
+			got := DetectLanguage()
+			if got != tt.want {
+				t.Errorf("DetectLanguage() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
