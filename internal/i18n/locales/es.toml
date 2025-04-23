@@ -1,0 +1,161 @@
+# Spanish translations
+
+[connection_establishing]
+other = "Estableciendo conexión SSH..."
+
+[connection_error]
+other = "Error de conexión SSH: {{.Error}}"
+
+[connection_closing]
+other = "Cerrando conexión SSH..."
+
+[connection_close_error]
+other = "Error al cerrar la conexión SSH: {{.Error}}"
+
+[config_load_error]
+other = "Error al cargar la configuración: {{.Error}}"
+
+[config_send_error]
+other = "Error al enviar la configuración: {{.Error}}"
+
+[heartbeat_error]
+other = "Error al enviar latido: {{.Error}}"
+
+[app_terminating]
+other = "La aplicación está terminando debido a la cancelación del contexto"
+
+[reconnecting]
+other = "Reconectando debido al cambio de configuración..."
+
+[connection_error_terminating]
+other = "Conexión terminada con error: {{.Error}}"
+
+[connection_normal_termination]
+other = "Conexión terminada normalmente, saliendo"
+
+[json_mode_error]
+other = "Error en modo JSON: {{.Error}}"
+
+[main_loop_error]
+other = "Error en el bucle principal: {{.Error}}"
+
+[ssh_key_error]
+other = "Error al cargar la clave SSH: {{.Error}}"
+
+[ssh_dialing]
+other = "Marcando servidor SSH {{.Host}}:{{.Port}}..."
+
+[ssh_connection_established]
+other = "Conexión SSH establecida"
+
+[ssh_server_auth]
+other = "Autenticando en el servidor usando clave pública"
+
+# Main application messages
+[i18n_init_error]
+other = "Advertencia: No se pudo inicializar la localización: {{.Error}}"
+
+[pid_file_error]
+other = "Advertencia: No se pudo escribir el archivo PID: {{.Error}}"
+
+[app_context_terminated]
+other = "Aplicación terminada debido a la cancelación del contexto"
+
+[app_error]
+other = "Error de aplicación: {{.Error}}"
+
+[pid_file_written]
+other = "Archivo PID escrito en {{.Path}} con PID {{.PID}}"
+
+# Signal handling
+[termination_signal]
+other = "Señal de terminación recibida, apagando..."
+
+[forced_exit]
+other = "Salida forzada después del tiempo de espera"
+
+[sighup_received]
+other = "SIGHUP recibido, recargando configuración..."
+
+[config_reload_error]
+other = "Error al recargar la configuración: {{.Error}}"
+
+# JSON protocol
+[json_daemon_shutdown]
+other = "Contexto cancelado, apagando el modo JSON del daemon..."
+
+[connection_closed]
+other = "Conexión cerrada normalmente"
+
+[connection_error_log]
+other = "Error de conexión: {{.Error}}"
+
+[reconnection_requested]
+other = "Reconexión solicitada"
+
+[reader_exiting]
+other = "Goroutine del lector de respuestas finalizando"
+
+[main_loop_exiting]
+other = "Goroutine del lector del bucle principal finalizando"
+
+[decode_error]
+other = "Error al decodificar la respuesta del servidor: {{.Error}}"
+
+[server_response]
+other = "Respuesta recibida del servidor: {{.Response}}"
+
+[json_shutdown]
+other = "Contexto cancelado, apagando modo JSON..."
+
+[input_closed]
+other = "Flujo de entrada cerrado"
+
+[context_cancelled_read]
+other = "Contexto cancelado durante la lectura"
+
+[response_no_writer]
+other = "Respuesta recibida (sin escritor de salida): {{.Response}}"
+
+[response_timeout]
+other = "Tiempo de espera agotado para la respuesta"
+
+[bytes_received]
+other = "Recibidos {{.Count}} bytes del subsistema"
+
+# SSH connection
+[ssh_connect_failed]
+other = "no se pudo conectar a {{.Address}}"
+
+[ssh_session_failed]
+other = "no se pudo crear la sesión"
+
+[ssh_subsystem_failed]
+other = "no se pudo solicitar el subsistema '{{.Subsystem}}'"
+
+[ssh_stdin_failed]
+other = "no se pudo obtener el pipe stdin"
+
+[ssh_stdout_failed]
+other = "no se pudo obtener el pipe stdout"
+
+[ssh_stderr_failed]
+other = "no se pudo obtener el pipe stderr"
+
+[ssh_stdin_close_error]
+other = "error al cerrar stdin: {{.Error}}"
+
+[ssh_session_close_error]
+other = "error al cerrar la sesión: {{.Error}}"
+
+[ssh_client_close_error]
+other = "error al cerrar el cliente: {{.Error}}"
+
+[connection_closed_payload]
+other = "conexión cerrada, no se puede enviar la carga útil"
+
+[marshal_payload_error]
+other = "error al serializar la carga útil: {{.Error}}"
+
+[write_payload_error]
+other = "error al escribir la carga útil: {{.Error}}"

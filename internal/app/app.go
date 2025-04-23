@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
+	"erlang-solutions.com/cortex_agent/internal/i18n"
 	"erlang-solutions.com/cortex_agent/internal/protocol"
 	"erlang-solutions.com/cortex_agent/internal/ssh"
 )
@@ -29,9 +30,9 @@ func New(configFile string, jsonMode bool) *App {
 func (a *App) Run(ctx context.Context) error {
 	cfg, err := config.Load(a.ConfigFile)
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		msg := i18n.T("config_load_error", map[string]interface{}{"Error": err})
+		return fmt.Errorf("%s", msg)
 	}
-
 	reconnectCh := make(chan struct{}, 1)
 	SetupConfigReloader(ctx, a.ConfigFile, &cfg, reconnectCh)
 
@@ -46,23 +47,24 @@ func (a *App) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			log.Println("Establishing SSH connection...")
+			log.Println(i18n.T("connection_establishing", nil))
 
 			connErr := a.runConnection(ctx, cfg, reconnectCh)
 
 			select {
 			case <-ctx.Done():
-				log.Println("Application terminating due to context cancellation")
+				log.Println(i18n.T("app_terminating", nil))
 				return ctx.Err()
 			case <-reconnectCh:
-				log.Println("Reconnecting due to configuration change...")
+				log.Println(i18n.T("reconnecting", nil))
 				continue
 			default:
 				if connErr != nil {
-					log.Printf("Connection terminated with error: %v", connErr)
+					msg := i18n.T("connection_error_terminating", map[string]interface{}{"Error": connErr})
+					log.Printf("%s", msg)
 					return connErr
 				}
-				log.Println("Connection terminated normally, exiting")
+				log.Println(i18n.T("connection_normal_termination", nil))
 				return nil
 			}
 		}
@@ -72,13 +74,15 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) runConnection(ctx context.Context, cfg config.Config, reconnectCh <-chan struct{}) error {
 	conn, err := ssh.Connect(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("SSH connection error: %w", err)
+		msg := i18n.T("connection_error", map[string]interface{}{"Error": err})
+		return fmt.Errorf("%s", msg)
 	}
 
 	defer func() {
-		log.Println("Closing SSH connection...")
+		log.Println(i18n.T("connection_closing", nil))
 		if closeErr := conn.Close(); closeErr != nil {
-			log.Printf("Error closing SSH connection: %v", closeErr)
+			msg := i18n.T("connection_close_error", map[string]interface{}{"Error": closeErr})
+			log.Printf("%s", msg)
 		}
 	}()
 
@@ -115,7 +119,8 @@ func (a *App) sendInitialConfig(conn ssh.Connection, cfg config.Config) error {
 	}
 
 	if err := conn.SendPayload(payload); err != nil {
-		return fmt.Errorf("failed to send configuration: %w", err)
+		msg := i18n.T("config_send_error", map[string]interface{}{"Error": err})
+		return fmt.Errorf("%s", msg)
 	}
 	return nil
 }
@@ -136,13 +141,15 @@ func (a *App) runJSONMode(ctx context.Context, conn ssh.Connection) error {
 			return ctx.Err()
 		case err := <-errCh:
 			if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) {
-				return fmt.Errorf("JSON mode error: %w", err)
+				msg := i18n.T("json_mode_error", map[string]interface{}{"Error": err})
+				return fmt.Errorf("%s", msg)
 			}
 			return err
 		case <-heartbeatTicker.C:
 			err := conn.SendPayload(map[string]string{"type": "heartbeat"})
 			if err != nil {
-				log.Printf("Failed to send heartbeat: %v", err)
+				msg := i18n.T("heartbeat_error", map[string]interface{}{"Error": err})
+				log.Printf("%s", msg)
 			}
 		}
 	}
@@ -151,7 +158,8 @@ func (a *App) runJSONMode(ctx context.Context, conn ssh.Connection) error {
 func (a *App) runStandardMode(ctx context.Context, conn ssh.Connection, reconnectCh <-chan struct{}) error {
 	err := protocol.RunMainLoop(ctx, conn, reconnectCh)
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("main loop error: %w", err)
+		msg := i18n.T("main_loop_error", map[string]interface{}{"Error": err})
+		return fmt.Errorf("%s", msg)
 	}
 	return nil
 }

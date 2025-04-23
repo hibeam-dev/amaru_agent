@@ -9,6 +9,7 @@ import (
 	"log"
 	"time"
 
+	"erlang-solutions.com/cortex_agent/internal/i18n"
 	"erlang-solutions.com/cortex_agent/internal/ssh"
 )
 
@@ -43,21 +44,21 @@ func daemonModeWait(ctx context.Context, errorCh <-chan error) error {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Context cancelled, shutting down daemon JSON mode...")
+			log.Println(i18n.T("json_daemon_shutdown", nil))
 			return ctx.Err()
 		case err := <-errorCh:
 			if isExpectedError(err) {
-				log.Println("Connection closed normally")
+				log.Println(i18n.T("connection_closed", nil))
 				return nil
 			}
-			log.Printf("Connection error: %v", err)
+			log.Printf(i18n.Tf("connection_error_log", nil), i18n.T("connection_error_log", map[string]interface{}{"Error": err}))
 			return err
 		}
 	}
 }
 
 func readResponses(ctx context.Context, conn ssh.Connection, responseCh chan<- json.RawMessage, errorCh chan<- error) {
-	defer log.Println("Response reader goroutine exiting")
+	defer log.Println(i18n.T("reader_exiting", nil))
 
 	sshDecoder := json.NewDecoder(conn.Stdout())
 	for {
@@ -71,7 +72,7 @@ func readResponses(ctx context.Context, conn ssh.Connection, responseCh chan<- j
 				if isExpectedError(err) {
 					return
 				}
-				log.Printf("Error decoding server response: %v", err)
+				log.Printf(i18n.Tf("decode_error", nil), i18n.T("decode_error", map[string]interface{}{"Error": err}))
 				select {
 				case errorCh <- fmt.Errorf("failed to read response: %w", err):
 				case <-ctx.Done():
@@ -79,7 +80,7 @@ func readResponses(ctx context.Context, conn ssh.Connection, responseCh chan<- j
 				return
 			}
 
-			log.Printf("Received response from server: %s", string(response))
+			log.Printf(i18n.Tf("server_response", nil), i18n.T("server_response", map[string]interface{}{"Response": string(response)}))
 			select {
 			case <-ctx.Done():
 				return
@@ -102,7 +103,7 @@ func processRequests(
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Context cancelled, shutting down JSON mode...")
+			log.Println(i18n.T("json_shutdown", nil))
 			return ctx.Err()
 		case err := <-errorCh:
 			return err
@@ -110,11 +111,11 @@ func processRequests(
 			var request json.RawMessage
 			if err := decoder.Decode(&request); err != nil {
 				if errors.Is(err, io.EOF) {
-					log.Println("Input stream closed")
+					log.Println(i18n.T("input_closed", nil))
 					return nil
 				}
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					log.Println("Context cancelled during read")
+					log.Println(i18n.T("context_cancelled_read", nil))
 					return ctx.Err()
 				}
 				return fmt.Errorf("failed to decode input: %w", err)
@@ -139,11 +140,11 @@ func processRequests(
 						return fmt.Errorf("failed to encode response: %w", err)
 					}
 				} else {
-					// In daemon mode, just log the response
-					log.Printf("Received response (no output writer): %s", string(response))
+					// In daemon mode, just log the response for now
+					log.Printf(i18n.Tf("response_no_writer", nil), i18n.T("response_no_writer", map[string]interface{}{"Response": string(response)}))
 				}
 			case <-responseTimer.C:
-				log.Println("Timeout waiting for response")
+				log.Println(i18n.T("response_timeout", nil))
 				continue
 			}
 		}

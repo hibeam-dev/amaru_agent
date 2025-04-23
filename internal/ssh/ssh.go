@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
+	"erlang-solutions.com/cortex_agent/internal/i18n"
 	"erlang-solutions.com/cortex_agent/pkg/errors"
 	"golang.org/x/crypto/ssh"
 )
@@ -36,47 +37,74 @@ type Conn struct {
 	mu      sync.Mutex
 }
 
+type ConfigPayload struct {
+	Application ApplicationConfig `json:"application"`
+	Agent       AgentConfig       `json:"agent"`
+}
+
+type ApplicationConfig struct {
+	Hostname string `json:"hostname"`
+	Port     int    `json:"port"`
+}
+
+type AgentConfig struct {
+	Tags map[string]string `json:"tags"`
+}
+
 func Connect(ctx context.Context, config config.Config) (Connection, error) {
 	key, err := os.ReadFile(config.SSH.KeyFile)
 	if err != nil {
-		return nil, errors.WrapWithBase(errors.ErrSSHConnect, "failed to read SSH key file", err)
+		return nil, errors.WrapWithBase(errors.ErrSSHConnect,
+			i18n.T("ssh_key_error", map[string]interface{}{"Error": err}), err)
 	}
 
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		return nil, errors.WrapWithBase(errors.ErrSSHConnect, "failed to parse SSH key", err)
+		return nil, errors.WrapWithBase(errors.ErrSSHConnect,
+			i18n.T("ssh_key_error", map[string]interface{}{"Error": err}), err)
 	}
 
 	sshConfig := &ssh.ClientConfig{
 		User:            config.SSH.User,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		Timeout:         config.SSH.Timeout,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Implement proper host key verification
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Use known_hosts file
 	}
 
 	addr := net.JoinHostPort(config.SSH.Host, strconv.Itoa(config.SSH.Port))
 
+	msg := i18n.T("ssh_dialing", map[string]interface{}{
+		"Host": config.SSH.Host,
+		"Port": config.SSH.Port,
+	})
+	log.Printf("%s", msg)
+
 	client, err := ssh.Dial("tcp", addr, sshConfig)
 	if err != nil {
-		return nil, errors.WrapWithBase(errors.ErrSSHConnect, fmt.Sprintf("failed to connect to %s", addr), err)
+		return nil, errors.WrapWithBase(errors.ErrSSHConnect, i18n.T("ssh_connect_failed", map[string]interface{}{"Address": addr}), err)
 	}
+
+	log.Println(i18n.T("ssh_connection_established", nil))
+	log.Println(i18n.T("ssh_server_auth", nil))
 
 	cleanup := func() {
 		if cerr := client.Close(); cerr != nil {
-			log.Printf("Error closing SSH client: %v", cerr)
+			msg := i18n.T("connection_close_error", map[string]interface{}{"Error": cerr})
+			log.Printf("%s", msg)
 		}
 	}
 
 	session, err := client.NewSession()
 	if err != nil {
 		cleanup()
-		return nil, errors.WrapWithBase(errors.ErrSSHSession, "failed to create session", err)
+		return nil, errors.WrapWithBase(errors.ErrSSHSession, i18n.T("ssh_session_failed", nil), err)
 	}
 
 	sessionCleanup := cleanup
 	cleanup = func() {
 		if cerr := session.Close(); cerr != nil {
-			log.Printf("Error closing SSH session: %v", cerr)
+			msg := i18n.T("connection_close_error", map[string]interface{}{"Error": cerr})
+			log.Printf("%s", msg)
 		}
 		sessionCleanup()
 	}
@@ -85,25 +113,25 @@ func Connect(ctx context.Context, config config.Config) (Connection, error) {
 	if err != nil {
 		cleanup()
 		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem,
-			fmt.Sprintf("failed to request subsystem '%s'", Subsystem), err)
+			i18n.T("ssh_subsystem_failed", map[string]interface{}{"Subsystem": Subsystem}), err)
 	}
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
 		cleanup()
-		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem, "failed to get stdin pipe", err)
+		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem, i18n.T("ssh_stdin_failed", nil), err)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
 		cleanup()
-		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem, "failed to get stdout pipe", err)
+		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem, i18n.T("ssh_stdout_failed", nil), err)
 	}
 
 	stderr, err := session.StderrPipe()
 	if err != nil {
 		cleanup()
-		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem, "failed to get stderr pipe", err)
+		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem, i18n.T("ssh_stderr_failed", nil), err)
 	}
 
 	return &Conn{
@@ -142,54 +170,8 @@ func (c *Conn) Close() error {
 		c.client = nil
 	}
 
-	// Return the first error if any
 	if len(errs) > 0 {
-		for _, err := range errs[1:] {
-			log.Printf("Additional close error: %v", err)
-		}
-		return errs[0]
-	}
-	return nil
-}
-
-type ConfigPayload struct {
-	Application ApplicationConfig `json:"application"`
-	Agent       AgentConfig       `json:"agent"`
-}
-
-type ApplicationConfig struct {
-	Hostname string `json:"hostname"`
-	Port     int    `json:"port"`
-}
-
-type AgentConfig struct {
-	Tags map[string]string `json:"tags"`
-}
-
-func (c *Conn) SendPayload(payload interface{}) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to serialize payload to JSON: %w", err)
-	}
-
-	_, err = c.stdin.Write(jsonData)
-	if err != nil {
-		return fmt.Errorf("failed to send payload to subsystem: %w", err)
-	}
-
-	buffer := make([]byte, 1024)
-	n, err := c.stdout.Read(buffer)
-	if err != nil {
-		return fmt.Errorf("failed to read acknowledgment: %w", err)
-	}
-
-	response := string(buffer[:n])
-	log.Printf("Received response: %s", response)
-	if response != "CONFIG_ACK\n" {
-		log.Printf("Unexpected response from subsystem: %q", response)
+		return errors.Join(errs...)
 	}
 
 	return nil
@@ -208,8 +190,28 @@ func (c *Conn) Stderr() io.Reader {
 }
 
 func (c *Conn) Client() interface{} {
-	if c.client == nil {
-		return nil
-	}
 	return c.client
+}
+
+func (c *Conn) SendPayload(payload interface{}) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.stdin == nil {
+		return errors.New(i18n.T("connection_closed_payload", nil))
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	data = append(data, '\n')
+
+	_, err = c.stdin.Write(data)
+	if err != nil {
+		return fmt.Errorf("failed to write payload: %w", err)
+	}
+
+	return nil
 }

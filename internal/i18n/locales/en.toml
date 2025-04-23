@@ -1,0 +1,161 @@
+# English translations
+
+[connection_establishing]
+other = "Establishing SSH connection..."
+
+[connection_error]
+other = "SSH connection error: {{.Error}}"
+
+[connection_closing]
+other = "Closing SSH connection..."
+
+[connection_close_error]
+other = "Error closing SSH connection: {{.Error}}"
+
+[config_load_error]
+other = "Failed to load configuration: {{.Error}}"
+
+[config_send_error]
+other = "Failed to send configuration: {{.Error}}"
+
+[heartbeat_error]
+other = "Failed to send heartbeat: {{.Error}}"
+
+[app_terminating]
+other = "Application terminating due to context cancellation"
+
+[reconnecting]
+other = "Reconnecting due to configuration change..."
+
+[connection_error_terminating]
+other = "Connection terminated with error: {{.Error}}"
+
+[connection_normal_termination]
+other = "Connection terminated normally, exiting"
+
+[json_mode_error]
+other = "JSON mode error: {{.Error}}"
+
+[main_loop_error]
+other = "Main loop error: {{.Error}}"
+
+[ssh_key_error]
+other = "Error loading SSH key: {{.Error}}"
+
+[ssh_dialing]
+other = "Dialing SSH server {{.Host}}:{{.Port}}..."
+
+[ssh_connection_established]
+other = "SSH connection established"
+
+[ssh_server_auth]
+other = "Authenticating to server using public key"
+
+# Main application messages
+[i18n_init_error]
+other = "Warning: Failed to initialize localization: {{.Error}}"
+
+[pid_file_error]
+other = "Warning: Failed to write PID file: {{.Error}}"
+
+[app_context_terminated]
+other = "Application terminated due to context cancellation"
+
+[app_error]
+other = "Application error: {{.Error}}"
+
+[pid_file_written]
+other = "PID file written to {{.Path}} with PID {{.PID}}"
+
+# Signal handling
+[termination_signal]
+other = "Termination signal received, shutting down..."
+
+[forced_exit]
+other = "Forced exit after timeout"
+
+[sighup_received]
+other = "SIGHUP received, reloading configuration..."
+
+[config_reload_error]
+other = "Failed to reload configuration: {{.Error}}"
+
+# JSON protocol
+[json_daemon_shutdown]
+other = "Context cancelled, shutting down daemon JSON mode..."
+
+[connection_closed]
+other = "Connection closed normally"
+
+[connection_error_log]
+other = "Connection error: {{.Error}}"
+
+[reconnection_requested]
+other = "Reconnection requested"
+
+[reader_exiting]
+other = "Response reader goroutine exiting"
+
+[main_loop_exiting]
+other = "Main loop reader goroutine exiting"
+
+[decode_error]
+other = "Error decoding server response: {{.Error}}"
+
+[server_response]
+other = "Received response from server: {{.Response}}"
+
+[json_shutdown]
+other = "Context cancelled, shutting down JSON mode..."
+
+[input_closed]
+other = "Input stream closed"
+
+[context_cancelled_read]
+other = "Context cancelled during read"
+
+[response_no_writer]
+other = "Received response (no output writer): {{.Response}}"
+
+[response_timeout]
+other = "Timeout waiting for response"
+
+[bytes_received]
+other = "Received {{.Count}} bytes from subsystem"
+
+# SSH connection
+[ssh_connect_failed]
+other = "failed to connect to {{.Address}}"
+
+[ssh_session_failed]
+other = "failed to create session"
+
+[ssh_subsystem_failed]
+other = "failed to request subsystem '{{.Subsystem}}'"
+
+[ssh_stdin_failed]
+other = "failed to get stdin pipe"
+
+[ssh_stdout_failed]
+other = "failed to get stdout pipe"
+
+[ssh_stderr_failed]
+other = "failed to get stderr pipe"
+
+[ssh_stdin_close_error]
+other = "error closing stdin: {{.Error}}"
+
+[ssh_session_close_error]
+other = "error closing session: {{.Error}}"
+
+[ssh_client_close_error]
+other = "error closing client: {{.Error}}"
+
+[connection_closed_payload]
+other = "connection closed, cannot send payload"
+
+[marshal_payload_error]
+other = "failed to marshal payload: {{.Error}}"
+
+[write_payload_error]
+other = "failed to write payload: {{.Error}}"
