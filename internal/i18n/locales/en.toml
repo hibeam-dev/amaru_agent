@@ -127,6 +127,16 @@ other = "Received {{.Count}} bytes from subsystem"
 [ssh_connect_failed]
 other = "failed to connect to {{.Address}}"
 
+# PID file operations
+[home_dir_error]
+other = "unable to determine user home directory"
+
+[pid_dir_create_error]
+other = "failed to create PID directory"
+
+[pid_file_write_error]
+other = "failed to write PID file"
+
 [ssh_session_failed]
 other = "failed to create session"
 
@@ -159,3 +169,22 @@ other = "failed to marshal payload: {{.Error}}"
 
 [write_payload_error]
 other = "failed to write payload: {{.Error}}"
+
+# Command-line flags and usage
+[usage_header]
+other = "Cortex Agent - Remote proxy manager"
+
+[usage_format]
+other = "Usage: cortex_agent [options]"
+
+[options_header]
+other = "Options:"
+
+[flag_json_desc]
+other = "Enable JSON communication mode for application integration"
+
+[flag_pid_desc]
+other = "Write PID file to ~/.cortex_agent/cortex_agent.pid"
+
+[flag_config_desc]
+other = "Path to TOML configuration file (default: config.toml)"

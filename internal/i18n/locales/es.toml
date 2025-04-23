@@ -127,6 +127,16 @@ other = "Recibidos {{.Count}} bytes del subsistema"
 [ssh_connect_failed]
 other = "no se pudo conectar a {{.Address}}"
 
+# PID file operations
+[home_dir_error]
+other = "no se pudo determinar el directorio de inicio del usuario"
+
+[pid_dir_create_error]
+other = "no se pudo crear el directorio PID"
+
+[pid_file_write_error]
+other = "no se pudo escribir el archivo PID"
+
 [ssh_session_failed]
 other = "no se pudo crear la sesión"
 
@@ -159,3 +169,22 @@ other = "error al serializar la carga útil: {{.Error}}"
 
 [write_payload_error]
 other = "error al escribir la carga útil: {{.Error}}"
+
+# Command-line flags and usage
+[usage_header]
+other = "Cortex Agent - Gestor de proxy remoto"
+
+[usage_format]
+other = "Uso: cortex_agent [opciones]"
+
+[options_header]
+other = "Opciones:"
+
+[flag_json_desc]
+other = "Habilitar el modo de comunicación JSON para la integración de aplicaciones"
+
+[flag_pid_desc]
+other = "Escribir archivo PID en ~/.cortex_agent/cortex_agent.pid"
+
+[flag_config_desc]
+other = "Ruta al archivo de configuración TOML (predeterminado: config.toml)"
