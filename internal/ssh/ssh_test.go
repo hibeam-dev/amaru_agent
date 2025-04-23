@@ -27,25 +27,23 @@ func TestConnClose(t *testing.T) {
 }
 
 func TestConnAccessors(t *testing.T) {
-	stdin := &mockWriteCloser{}
-	stdout := &mockReader{}
-	stderr := &mockReader{}
+	mockConn := NewMockConnection()
 
 	conn := &Conn{
-		stdin:  stdin,
-		stdout: stdout,
-		stderr: stderr,
+		stdin:  mockConn.Stdin(),
+		stdout: mockConn.Stdout(),
+		stderr: mockConn.Stderr(),
 	}
 
-	if conn.Stdin() != stdin {
+	if conn.Stdin() != mockConn.Stdin() {
 		t.Error("Stdin() did not return the expected writer")
 	}
 
-	if conn.Stdout() != stdout {
+	if conn.Stdout() != mockConn.Stdout() {
 		t.Error("Stdout() did not return the expected reader")
 	}
 
-	if conn.Stderr() != stderr {
+	if conn.Stderr() != mockConn.Stderr() {
 		t.Error("Stderr() did not return the expected reader")
 	}
 }
@@ -135,36 +133,4 @@ func TestMockConnection(t *testing.T) {
 	if err = mock.Close(); err != io.ErrClosedPipe {
 		t.Errorf("Expected ErrClosedPipe, got: %v", err)
 	}
-}
-
-// Legacy mocks kept for backward compatibility
-
-type mockWriteCloser struct {
-	writeFunc func(p []byte) (n int, err error)
-	closeFunc func() error
-}
-
-func (m *mockWriteCloser) Write(p []byte) (n int, err error) {
-	if m.writeFunc != nil {
-		return m.writeFunc(p)
-	}
-	return len(p), nil
-}
-
-func (m *mockWriteCloser) Close() error {
-	if m.closeFunc != nil {
-		return m.closeFunc()
-	}
-	return nil
-}
-
-type mockReader struct {
-	readFunc func(p []byte) (n int, err error)
-}
-
-func (m *mockReader) Read(p []byte) (n int, err error) {
-	if m.readFunc != nil {
-		return m.readFunc(p)
-	}
-	return 0, io.EOF
 }
