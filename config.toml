@@ -1,4 +1,4 @@
-[ssh]
+[connection]
 host = "localhost"
 port = 22000
 user = "agent"

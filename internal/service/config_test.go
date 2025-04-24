@@ -11,7 +11,7 @@ import (
 )
 
 const testConfigContent = `
-[SSH]
+[Connection]
 Host = "test-host"
 Port = 22
 User = "test-user"
@@ -65,11 +65,11 @@ func TestConfigService_LoadConfig(t *testing.T) {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	if cfg.SSH.Host != "test-host" {
-		t.Errorf("Expected SSH.Host to be 'test-host', got '%s'", cfg.SSH.Host)
+	if cfg.Connection.Host != "test-host" {
+		t.Errorf("Expected Connection.Host to be 'test-host', got '%s'", cfg.Connection.Host)
 	}
-	if cfg.SSH.Port != 22 {
-		t.Errorf("Expected SSH.Port to be 22, got %d", cfg.SSH.Port)
+	if cfg.Connection.Port != 22 {
+		t.Errorf("Expected Connection.Port to be 22, got %d", cfg.Connection.Port)
 	}
 	if cfg.Application.Hostname != "test-app-host" {
 		t.Errorf("Expected Application.Hostname to be 'test-app-host', got '%s'", cfg.Application.Hostname)
@@ -82,8 +82,8 @@ func TestConfigService_LoadConfig(t *testing.T) {
 	}
 
 	storedCfg := svc.GetConfig()
-	if storedCfg.SSH.Host != "test-host" {
-		t.Errorf("Expected stored config SSH.Host to be 'test-host', got '%s'", storedCfg.SSH.Host)
+	if storedCfg.Connection.Host != "test-host" {
+		t.Errorf("Expected stored config Connection.Host to be 'test-host', got '%s'", storedCfg.Connection.Host)
 	}
 }
 
@@ -153,8 +153,8 @@ func TestConfigService_ReloadAndPublishConfig(t *testing.T) {
 			t.Fatal("Event data is not a config.Config")
 		}
 
-		if cfg.SSH.Host != "test-host" {
-			t.Errorf("Expected SSH.Host to be 'test-host', got '%s'", cfg.SSH.Host)
+		if cfg.Connection.Host != "test-host" {
+			t.Errorf("Expected Connection.Host to be 'test-host', got '%s'", cfg.Connection.Host)
 		}
 
 	case <-time.After(500 * time.Millisecond):
@@ -162,8 +162,8 @@ func TestConfigService_ReloadAndPublishConfig(t *testing.T) {
 	}
 
 	storedCfg := svc.GetConfig()
-	if storedCfg.SSH.Host != "test-host" {
-		t.Errorf("Expected stored config SSH.Host to be 'test-host', got '%s'", storedCfg.SSH.Host)
+	if storedCfg.Connection.Host != "test-host" {
+		t.Errorf("Expected stored config Connection.Host to be 'test-host', got '%s'", storedCfg.Connection.Host)
 	}
 }
 
@@ -173,7 +173,7 @@ func TestConfigService_SIGHUPHandler(t *testing.T) {
 	}
 
 	initialContent := `
-[SSH]
+[Connection]
 Host = "initial-host"
 Port = 22
 User = "test-user"
@@ -199,7 +199,7 @@ Port = 8080
 	configCh := bus.Subscribe(ConfigUpdated, 1)
 
 	updatedContent := `
-[SSH]
+[Connection]
 Host = "updated-host"
 Port = 22
 User = "test-user"
@@ -228,8 +228,8 @@ Port = 8080
 			t.Fatal("Event data is not a config.Config")
 		}
 
-		if cfg.SSH.Host != "updated-host" {
-			t.Errorf("Expected SSH.Host to be 'updated-host', got '%s'", cfg.SSH.Host)
+		if cfg.Connection.Host != "updated-host" {
+			t.Errorf("Expected Connection.Host to be 'updated-host', got '%s'", cfg.Connection.Host)
 		}
 		if cfg.Application.Hostname != "updated-app" {
 			t.Errorf("Expected Application.Hostname to be 'updated-app', got '%s'", cfg.Application.Hostname)
@@ -240,8 +240,8 @@ Port = 8080
 	}
 
 	storedCfg := svc.GetConfig()
-	if storedCfg.SSH.Host != "updated-host" {
-		t.Errorf("Expected stored config SSH.Host to be 'updated-host', got '%s'", storedCfg.SSH.Host)
+	if storedCfg.Connection.Host != "updated-host" {
+		t.Errorf("Expected stored config Connection.Host to be 'updated-host', got '%s'", storedCfg.Connection.Host)
 	}
 
 	if err := svc.Stop(ctx); err != nil {

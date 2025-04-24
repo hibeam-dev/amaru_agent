@@ -1,16 +1,16 @@
 # Spanish translations
 
 [connection_establishing]
-other = "Estableciendo conexión SSH..."
+other = "Estableciendo conexión al servidor cortex..."
 
 [connection_error]
-other = "Error de conexión SSH: {{.Error}}"
+other = "Error de conexión: {{.Error}}"
 
 [connection_closing]
-other = "Cerrando conexión SSH..."
+other = "Cerrando conexión al servidor cortex..."
 
 [connection_close_error]
-other = "Error al cerrar la conexión SSH: {{.Error}}"
+other = "Error al cerrar la conexión: {{.Error}}"
 
 [config_load_error]
 other = "Error al cargar la configuración: {{.Error}}"
@@ -37,13 +37,13 @@ other = "Error en modo JSON: {{.Error}}"
 other = "Error en el bucle principal: {{.Error}}"
 
 [ssh_key_error]
-other = "Error al cargar la clave SSH: {{.Error}}"
+other = "Error al cargar la clave de autenticación: {{.Error}}"
 
 [ssh_dialing]
-other = "Marcando servidor SSH {{.Host}}:{{.Port}}..."
+other = "Conectando con el servidor cortex {{.Host}}:{{.Port}}..."
 
 [ssh_connection_established]
-other = "Conexión SSH establecida"
+other = "Conexión con el servidor cortex establecida"
 
 
 [ssh_server_auth]
@@ -94,7 +94,7 @@ other = "Error al actualizar la configuración: {{.Error}}. Se reconectará en s
 other = "Configuración actualizada con éxito."
 
 [config_sent]
-other = "Configuración enviada al servidor SSH con éxito."
+other = "Configuración enviada al servidor cortex con éxito."
 
 # JSON protocol
 
@@ -129,53 +129,53 @@ other = "Tiempo de espera agotado para la respuesta"
 
 # SSH connection
 [ssh_connect_failed]
-other = "no se pudo conectar a {{.Address}}"
+other = "No fue posible conectar con {{.Address}}"
 
 # PID file operations
 [home_dir_error]
-other = "no se pudo determinar el directorio de inicio del usuario"
+other = "No se pudo determinar el directorio de inicio del usuario"
 
 [pid_dir_create_error]
-other = "no se pudo crear el directorio PID"
+other = "No se pudo crear el directorio PID"
 
 [pid_file_write_error]
-other = "no se pudo escribir el archivo PID"
+other = "No se pudo escribir el archivo PID"
 
 [ssh_session_failed]
-other = "no se pudo crear la sesión"
+other = "No se pudo crear la sesión"
 
 [ssh_subsystem_failed]
-other = "no se pudo solicitar el subsistema '{{.Subsystem}}'"
+other = "No se pudo solicitar el subsistema '{{.Subsystem}}'"
 
 [ssh_stdin_failed]
-other = "no se pudo obtener el pipe stdin"
+other = "No se pudo establecer el canal de entrada"
 
 [ssh_stdout_failed]
-other = "no se pudo obtener el pipe stdout"
+other = "No se pudo establecer el canal de salida"
 
 [ssh_stderr_failed]
-other = "no se pudo obtener el pipe stderr"
+other = "No se pudo establecer el canal de errores"
 
 [ssh_stdin_close_error]
-other = "error al cerrar stdin: {{.Error}}"
+other = "Error al cerrar el canal de entrada: {{.Error}}"
 
 [ssh_session_close_error]
-other = "error al cerrar la sesión: {{.Error}}"
+other = "Error al cerrar la sesión: {{.Error}}"
 
 [ssh_client_close_error]
-other = "error al cerrar el cliente: {{.Error}}"
+other = "Error al cerrar el cliente: {{.Error}}"
 
 [connection_closed_payload]
-other = "conexión cerrada, no se puede enviar la carga útil"
+other = "La conexión está cerrada, no se pueden enviar datos"
 
 [marshal_payload_error]
-other = "error al serializar la carga útil: {{.Error}}"
+other = "Error al serializar los datos: {{.Error}}"
 
 [write_payload_error]
-other = "error al escribir la carga útil: {{.Error}}"
+other = "Error al enviar los datos: {{.Error}}"
 
 [ssh_read_error]
-other = "error al leer de la conexión SSH: {{.Error}}"
+other = "Error al leer datos de la conexión: {{.Error}}"
 
 
 [stderr_read_error]
@@ -221,3 +221,13 @@ other = "Escribir archivo PID en ~/.cortex_agent/cortex_agent.pid"
 
 [flag_config_desc]
 other = "Ruta al archivo de configuración TOML (predeterminado: config.toml)"
+
+# Configuration validation messages
+[connection_host_missing]
+other = "No se ha especificado el host de conexión"
+
+[connection_user_missing]
+other = "No se ha especificado el usuario de conexión"
+
+[connection_keyfile_missing]
+other = "No se ha especificado el archivo de clave de conexión"

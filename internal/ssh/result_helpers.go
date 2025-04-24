@@ -18,7 +18,7 @@ import (
 )
 
 func ConnectResult(ctx context.Context, cfg config.Config) result.Result[Connection] {
-	keyResult := readKeyFile(cfg.SSH.KeyFile)
+	keyResult := readKeyFile(cfg.Connection.KeyFile)
 	if keyResult.IsErr() {
 		return result.Err[Connection](keyResult.Error())
 	}
@@ -31,17 +31,17 @@ func ConnectResult(ctx context.Context, cfg config.Config) result.Result[Connect
 	signer := signerResult.Value()
 
 	sshConfig := &ssh.ClientConfig{
-		User:            cfg.SSH.User,
+		User:            cfg.Connection.User,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		Timeout:         cfg.SSH.Timeout,
+		Timeout:         cfg.Connection.Timeout,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Use known_hosts file
 	}
 
-	addr := net.JoinHostPort(cfg.SSH.Host, strconv.Itoa(cfg.SSH.Port))
+	addr := net.JoinHostPort(cfg.Connection.Host, strconv.Itoa(cfg.Connection.Port))
 
 	msg := i18n.T("ssh_dialing", map[string]interface{}{
-		"Host": cfg.SSH.Host,
-		"Port": cfg.SSH.Port,
+		"Host": cfg.Connection.Host,
+		"Port": cfg.Connection.Port,
 	})
 	log.Printf("%s", msg)
 

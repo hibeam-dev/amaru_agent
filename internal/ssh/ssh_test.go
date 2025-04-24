@@ -50,11 +50,11 @@ func TestConnectFailures(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := config.Config{}
-	cfg.SSH.Host = "localhost"
-	cfg.SSH.Port = 22
-	cfg.SSH.User = "testuser"
-	cfg.SSH.KeyFile = "/does/not/exist/key.file"
-	cfg.SSH.Timeout = 1 * time.Second
+	cfg.Connection.Host = "localhost"
+	cfg.Connection.Port = 22
+	cfg.Connection.User = "testuser"
+	cfg.Connection.KeyFile = "/does/not/exist/key.file"
+	cfg.Connection.Timeout = 1 * time.Second
 
 	_, err := Connect(ctx, cfg)
 	if err == nil {
