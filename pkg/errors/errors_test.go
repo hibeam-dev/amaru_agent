@@ -48,9 +48,9 @@ func TestPredefinedErrors(t *testing.T) {
 		want string
 	}{
 		{ErrConfigLoad, "config load failed"},
-		{ErrSSHConnect, "SSH connection failed"},
-		{ErrSSHSession, "SSH session failed"},
-		{ErrSSHSubsystem, "SSH subsystem failed"},
+		{ErrConnectionFailed, "connection failed"},
+		{ErrSessionFailed, "session failed"},
+		{ErrSubsystemFailed, "subsystem failed"},
 	}
 
 	for _, tc := range testCases {

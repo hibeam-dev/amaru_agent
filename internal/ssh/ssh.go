@@ -54,13 +54,13 @@ type AgentConfig struct {
 func Connect(ctx context.Context, config config.Config) (Connection, error) {
 	key, err := os.ReadFile(config.Connection.KeyFile)
 	if err != nil {
-		return nil, errors.WrapWithBase(errors.ErrSSHConnect,
+		return nil, errors.WrapWithBase(errors.ErrConnectionFailed,
 			i18n.T("ssh_key_error", map[string]interface{}{"Error": err}), err)
 	}
 
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		return nil, errors.WrapWithBase(errors.ErrSSHConnect,
+		return nil, errors.WrapWithBase(errors.ErrConnectionFailed,
 			i18n.T("ssh_key_error", map[string]interface{}{"Error": err}), err)
 	}
 
@@ -81,7 +81,7 @@ func Connect(ctx context.Context, config config.Config) (Connection, error) {
 
 	client, err := ssh.Dial("tcp", addr, sshConfig)
 	if err != nil {
-		return nil, errors.WrapWithBase(errors.ErrSSHConnect, i18n.T("ssh_connect_failed", map[string]interface{}{"Address": addr}), err)
+		return nil, errors.WrapWithBase(errors.ErrConnectionFailed, i18n.T("ssh_connect_failed", map[string]interface{}{"Address": addr}), err)
 	}
 
 	log.Println(i18n.T("ssh_connection_established", nil))
@@ -97,7 +97,7 @@ func Connect(ctx context.Context, config config.Config) (Connection, error) {
 	session, err := client.NewSession()
 	if err != nil {
 		cleanup()
-		return nil, errors.WrapWithBase(errors.ErrSSHSession, i18n.T("ssh_session_failed", nil), err)
+		return nil, errors.WrapWithBase(errors.ErrSessionFailed, i18n.T("ssh_session_failed", nil), err)
 	}
 
 	sessionCleanup := cleanup
@@ -112,26 +112,26 @@ func Connect(ctx context.Context, config config.Config) (Connection, error) {
 	err = session.RequestSubsystem(Subsystem)
 	if err != nil {
 		cleanup()
-		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem,
+		return nil, errors.WrapWithBase(errors.ErrSubsystemFailed,
 			i18n.T("ssh_subsystem_failed", map[string]interface{}{"Subsystem": Subsystem}), err)
 	}
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
 		cleanup()
-		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem, i18n.T("ssh_stdin_failed", nil), err)
+		return nil, errors.WrapWithBase(errors.ErrSubsystemFailed, i18n.T("ssh_stdin_failed", nil), err)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
 		cleanup()
-		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem, i18n.T("ssh_stdout_failed", nil), err)
+		return nil, errors.WrapWithBase(errors.ErrSubsystemFailed, i18n.T("ssh_stdout_failed", nil), err)
 	}
 
 	stderr, err := session.StderrPipe()
 	if err != nil {
 		cleanup()
-		return nil, errors.WrapWithBase(errors.ErrSSHSubsystem, i18n.T("ssh_stderr_failed", nil), err)
+		return nil, errors.WrapWithBase(errors.ErrSubsystemFailed, i18n.T("ssh_stderr_failed", nil), err)
 	}
 
 	return &Conn{
