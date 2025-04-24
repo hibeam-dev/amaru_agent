@@ -93,9 +93,8 @@ func T(messageID string, templateData map[string]interface{}) string {
 	return msg
 }
 
-// Avoid Go's "non-constant format string" linter errors
 func Tf(messageID string, templateData map[string]interface{}) string {
-	return "%s"
+	return T(messageID, templateData)
 }
 
 func Tp(messageID string, pluralCount interface{}, templateData map[string]interface{}) string {

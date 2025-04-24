@@ -21,9 +21,6 @@ other = "Error al enviar la configuración: {{.Error}}"
 [heartbeat_error]
 other = "Error al enviar latido: {{.Error}}"
 
-[app_terminating]
-other = "La aplicación está terminando debido a la cancelación del contexto"
-
 [reconnecting]
 other = "Reconectando debido al cambio de configuración..."
 
@@ -48,6 +45,7 @@ other = "Marcando servidor SSH {{.Host}}:{{.Port}}..."
 [ssh_connection_established]
 other = "Conexión SSH establecida"
 
+
 [ssh_server_auth]
 other = "Autenticando en el servidor usando clave pública"
 
@@ -58,8 +56,8 @@ other = "Advertencia: No se pudo inicializar la localización: {{.Error}}"
 [pid_file_error]
 other = "Advertencia: No se pudo escribir el archivo PID: {{.Error}}"
 
-[app_context_terminated]
-other = "Aplicación terminada debido a la cancelación del contexto"
+[app_terminated]
+other = "Aplicación terminada: {{.Reason}}"
 
 [app_error]
 other = "Error de aplicación: {{.Error}}"
@@ -80,9 +78,25 @@ other = "SIGHUP recibido, recargando configuración..."
 [config_reload_error]
 other = "Error al recargar la configuración: {{.Error}}"
 
+[config_reload_requested]
+other = "Recarga de configuración solicitada"
+
+[config_reloading]
+other = "Recargando configuración..."
+
+[config_updating]
+other = "Actualizando configuración sin reconectar..."
+
+[config_update_failed]
+other = "Error al actualizar la configuración: {{.Error}}. Se reconectará en su lugar."
+
+[config_updated]
+other = "Configuración actualizada con éxito."
+
+[config_sent]
+other = "Configuración enviada al servidor SSH con éxito."
+
 # JSON protocol
-[json_daemon_shutdown]
-other = "Contexto cancelado, apagando el modo JSON del daemon..."
 
 [connection_closed]
 other = "Conexión cerrada normalmente"
@@ -93,11 +107,7 @@ other = "Error de conexión: {{.Error}}"
 [reconnection_requested]
 other = "Reconexión solicitada"
 
-[reader_exiting]
-other = "Goroutine del lector de respuestas finalizando"
 
-[main_loop_exiting]
-other = "Goroutine del lector del bucle principal finalizando"
 
 [decode_error]
 other = "Error al decodificar la respuesta del servidor: {{.Error}}"
@@ -108,11 +118,7 @@ other = "Respuesta recibida del servidor: {{.Response}}"
 [json_shutdown]
 other = "Contexto cancelado, apagando modo JSON..."
 
-[input_closed]
-other = "Flujo de entrada cerrado"
 
-[context_cancelled_read]
-other = "Contexto cancelado durante la lectura"
 
 [response_no_writer]
 other = "Respuesta recibida (sin escritor de salida): {{.Response}}"
@@ -120,8 +126,6 @@ other = "Respuesta recibida (sin escritor de salida): {{.Response}}"
 [response_timeout]
 other = "Tiempo de espera agotado para la respuesta"
 
-[bytes_received]
-other = "Recibidos {{.Count}} bytes del subsistema"
 
 # SSH connection
 [ssh_connect_failed]
@@ -173,14 +177,31 @@ other = "error al escribir la carga útil: {{.Error}}"
 [ssh_read_error]
 other = "error al leer de la conexión SSH: {{.Error}}"
 
-[stderr_reader_exiting]
-other = "Goroutine del lector de stderr finalizando"
 
 [stderr_read_error]
 other = "Error al leer stderr: {{.Error}}"
 
 [server_stderr]
 other = "Stderr del servidor: {{.Output}}"
+
+# Service status messages
+[connection_established]
+other = "Conexión establecida con éxito"
+
+[connection_failed]
+other = "Conexión fallida"
+
+[app_termination_signal]
+other = "Señal de terminación recibida, apagando la aplicación"
+
+[ssh_stderr_error]
+other = "Error al leer desde stderr: {{.Error}}"
+
+[stderr_received]
+other = "Recibido desde stderr: {{.Data}}"
+
+[service_stop_error]
+other = "Error al detener el servicio de {{.Service}}: {{.Error}}"
 
 # Command-line flags and usage
 [usage_header]

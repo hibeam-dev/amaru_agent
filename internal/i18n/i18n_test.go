@@ -89,13 +89,63 @@ func TestTranslation(t *testing.T) {
 	}
 
 	SetLanguage("en")
-	msg := T("connection_error", map[string]interface{}{"Error": "test error"})
-	if msg == "connection_error" {
-		t.Errorf("Translation failed, got message ID")
+	testError := "test error"
+
+	testCases := []struct {
+		name       string
+		messageID  string
+		data       map[string]interface{}
+		expected   string
+		shouldFail bool
+	}{
+		{
+			name:       "Basic translation",
+			messageID:  "connection_error",
+			data:       map[string]interface{}{"Error": testError},
+			expected:   "SSH connection error: test error",
+			shouldFail: false,
+		},
+		{
+			name:       "Unknown message ID",
+			messageID:  "unknown_message_id",
+			data:       nil,
+			expected:   "unknown_message_id", // Should return messageID as fallback
+			shouldFail: false,
+		},
+		{
+			name:       "Translation with nil data",
+			messageID:  "ssh_connection_established",
+			data:       nil,
+			expected:   "SSH connection established",
+			shouldFail: false,
+		},
 	}
 
-	msg = T("unknown_message_id", nil)
-	if msg != "unknown_message_id" {
-		t.Errorf("Expected message ID as fallback, got '%s'", msg)
+	for _, tc := range testCases {
+		t.Run("T/"+tc.name, func(t *testing.T) {
+			result := T(tc.messageID, tc.data)
+
+			if tc.shouldFail {
+				if result != tc.messageID {
+					t.Errorf("Expected message ID as fallback for failing test, got '%s'", result)
+				}
+			} else {
+				if tc.expected != "" && result != tc.expected {
+					t.Errorf("Expected '%s', got '%s'", tc.expected, result)
+				}
+				if result == tc.messageID && tc.messageID != tc.expected {
+					t.Errorf("Translation failed, got message ID '%s'", result)
+				}
+			}
+		})
 	}
+
+	t.Run("Tf function", func(t *testing.T) {
+		expected := T("connection_error", map[string]interface{}{"Error": testError})
+		result := Tf("connection_error", map[string]interface{}{"Error": testError})
+
+		if result != expected {
+			t.Errorf("Tf produced different result than T: expected '%s', got '%s'", expected, result)
+		}
+	})
 }

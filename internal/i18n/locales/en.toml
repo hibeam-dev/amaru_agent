@@ -21,9 +21,6 @@ other = "Failed to send configuration: {{.Error}}"
 [heartbeat_error]
 other = "Failed to send heartbeat: {{.Error}}"
 
-[app_terminating]
-other = "Application terminating due to context cancellation"
-
 [reconnecting]
 other = "Reconnecting due to configuration change..."
 
@@ -48,6 +45,7 @@ other = "Dialing SSH server {{.Host}}:{{.Port}}..."
 [ssh_connection_established]
 other = "SSH connection established"
 
+
 [ssh_server_auth]
 other = "Authenticating to server using public key"
 
@@ -58,8 +56,8 @@ other = "Warning: Failed to initialize localization: {{.Error}}"
 [pid_file_error]
 other = "Warning: Failed to write PID file: {{.Error}}"
 
-[app_context_terminated]
-other = "Application terminated due to context cancellation"
+[app_terminated]
+other = "Application terminated: {{.Reason}}"
 
 [app_error]
 other = "Application error: {{.Error}}"
@@ -80,9 +78,25 @@ other = "SIGHUP received, reloading configuration..."
 [config_reload_error]
 other = "Failed to reload configuration: {{.Error}}"
 
+[config_reload_requested]
+other = "Configuration reload requested"
+
+[config_reloading]
+other = "Reloading configuration..."
+
+[config_updating]
+other = "Updating configuration without reconnecting..."
+
+[config_update_failed]
+other = "Failed to update configuration: {{.Error}}. Will reconnect instead."
+
+[config_updated]
+other = "Configuration updated successfully."
+
+[config_sent]
+other = "Configuration sent to SSH server successfully."
+
 # JSON protocol
-[json_daemon_shutdown]
-other = "Context cancelled, shutting down daemon JSON mode..."
 
 [connection_closed]
 other = "Connection closed normally"
@@ -93,11 +107,7 @@ other = "Connection error: {{.Error}}"
 [reconnection_requested]
 other = "Reconnection requested"
 
-[reader_exiting]
-other = "Response reader goroutine exiting"
 
-[main_loop_exiting]
-other = "Main loop reader goroutine exiting"
 
 [decode_error]
 other = "Error decoding server response: {{.Error}}"
@@ -108,11 +118,7 @@ other = "Received response from server: {{.Response}}"
 [json_shutdown]
 other = "Context cancelled, shutting down JSON mode..."
 
-[input_closed]
-other = "Input stream closed"
 
-[context_cancelled_read]
-other = "Context cancelled during read"
 
 [response_no_writer]
 other = "Received response (no output writer): {{.Response}}"
@@ -120,8 +126,6 @@ other = "Received response (no output writer): {{.Response}}"
 [response_timeout]
 other = "Timeout waiting for response"
 
-[bytes_received]
-other = "Received {{.Count}} bytes from subsystem"
 
 # SSH connection
 [ssh_connect_failed]
@@ -173,14 +177,31 @@ other = "failed to write payload: {{.Error}}"
 [ssh_read_error]
 other = "failed to read from SSH connection: {{.Error}}"
 
-[stderr_reader_exiting]
-other = "Stderr reader goroutine exiting"
 
 [stderr_read_error]
 other = "Error reading stderr: {{.Error}}"
 
 [server_stderr]
 other = "Server stderr: {{.Output}}"
+
+# Service status messages
+[connection_established]
+other = "Connection established successfully"
+
+[connection_failed]
+other = "Connection failed"
+
+[app_termination_signal]
+other = "Termination signal received, shutting down application"
+
+[ssh_stderr_error]
+other = "Error reading from stderr: {{.Error}}"
+
+[stderr_received]
+other = "Received from stderr: {{.Data}}"
+
+[service_stop_error]
+other = "Error stopping {{.Service}} service: {{.Error}}"
 
 # Command-line flags and usage
 [usage_header]

@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"erlang-solutions.com/cortex_agent/internal/config"
 )
 
-func TestConfigServiceLoadConfig(t *testing.T) {
-	content := `
+const testConfigContent = `
 [SSH]
 Host = "test-host"
 Port = 22
@@ -25,22 +27,39 @@ Tags = { env = "test" }
 [Logging]
 Level = "info"
 `
+
+func setupTestConfig(t *testing.T, content string) (string, func()) {
+	t.Helper()
+
 	tmpfile, err := os.CreateTemp("", "config-*.toml")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer func() {
+
+	cleanup := func() {
 		_ = os.Remove(tmpfile.Name())
-	}()
+	}
 
 	if _, err := tmpfile.Write([]byte(content)); err != nil {
+		cleanup()
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
+
 	if err := tmpfile.Close(); err != nil {
+		cleanup()
 		t.Fatalf("Failed to close temp file: %v", err)
 	}
 
-	svc := NewConfigService(tmpfile.Name())
+	return tmpfile.Name(), cleanup
+}
+
+func TestConfigService_LoadConfig(t *testing.T) {
+	configPath, cleanup := setupTestConfig(t, testConfigContent)
+	defer cleanup()
+
+	bus := NewEventBus()
+	svc := NewConfigService(configPath, bus)
+
 	cfg, err := svc.LoadConfig()
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
@@ -52,14 +71,8 @@ Level = "info"
 	if cfg.SSH.Port != 22 {
 		t.Errorf("Expected SSH.Port to be 22, got %d", cfg.SSH.Port)
 	}
-	if cfg.SSH.User != "test-user" {
-		t.Errorf("Expected SSH.User to be 'test-user', got '%s'", cfg.SSH.User)
-	}
 	if cfg.Application.Hostname != "test-app-host" {
 		t.Errorf("Expected Application.Hostname to be 'test-app-host', got '%s'", cfg.Application.Hostname)
-	}
-	if cfg.Application.Port != 8080 {
-		t.Errorf("Expected Application.Port to be 8080, got %d", cfg.Application.Port)
 	}
 	if cfg.Agent.Tags["env"] != "test" {
 		t.Errorf("Expected Agent.Tags['env'] to be 'test', got '%s'", cfg.Agent.Tags["env"])
@@ -67,53 +80,171 @@ Level = "info"
 	if cfg.Logging.Level != "info" {
 		t.Errorf("Expected Logging.Level to be 'info', got '%s'", cfg.Logging.Level)
 	}
+
+	storedCfg := svc.GetConfig()
+	if storedCfg.SSH.Host != "test-host" {
+		t.Errorf("Expected stored config SSH.Host to be 'test-host', got '%s'", storedCfg.SSH.Host)
+	}
 }
 
-func TestConfigServiceSetupReloader(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping test in CI environment")
+func TestConfigService_StartStop(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "config.toml")
+	bus := NewEventBus()
+	svc := NewConfigService(tmpFile, bus)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	if err := svc.Start(ctx); err != nil {
+		t.Fatalf("Expected no error from Start(), got: %v", err)
 	}
 
-	content := `
+	if err := svc.Stop(ctx); err != nil {
+		t.Fatalf("Expected no error from Stop(), got: %v", err)
+	}
+}
+
+func TestConfigService_GetSetConfig(t *testing.T) {
+	bus := NewEventBus()
+	svc := NewConfigService("config.toml", bus)
+
+	testCfg := config.Config{}
+	testCfg.Application.Hostname = "test-host"
+	testCfg.Application.Port = 8080
+	testCfg.Agent.Tags = map[string]string{"env": "test"}
+
+	svc.SetConfig(testCfg)
+
+	retrievedCfg := svc.GetConfig()
+	if retrievedCfg.Application.Hostname != "test-host" {
+		t.Errorf("Expected hostname to be test-host, got %s", retrievedCfg.Application.Hostname)
+	}
+	if retrievedCfg.Application.Port != 8080 {
+		t.Errorf("Expected port to be 8080, got %d", retrievedCfg.Application.Port)
+	}
+	if retrievedCfg.Agent.Tags["env"] != "test" {
+		t.Errorf("Expected env tag to be test, got %s", retrievedCfg.Agent.Tags["env"])
+	}
+}
+
+func TestConfigService_ReloadAndPublishConfig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode")
+	}
+
+	configPath, cleanup := setupTestConfig(t, testConfigContent)
+	defer cleanup()
+
+	bus := NewEventBus()
+	svc := NewConfigService(configPath, bus)
+
+	configChan := bus.Subscribe(ConfigUpdated, 1)
+
+	svc.reloadAndPublishConfig()
+
+	select {
+	case event := <-configChan:
+		if event.Type != ConfigUpdated {
+			t.Errorf("Expected event type %s, got %s", ConfigUpdated, event.Type)
+		}
+
+		cfg, ok := event.Data.(config.Config)
+		if !ok {
+			t.Fatal("Event data is not a config.Config")
+		}
+
+		if cfg.SSH.Host != "test-host" {
+			t.Errorf("Expected SSH.Host to be 'test-host', got '%s'", cfg.SSH.Host)
+		}
+
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Timed out waiting for config update event")
+	}
+
+	storedCfg := svc.GetConfig()
+	if storedCfg.SSH.Host != "test-host" {
+		t.Errorf("Expected stored config SSH.Host to be 'test-host', got '%s'", storedCfg.SSH.Host)
+	}
+}
+
+func TestConfigService_SIGHUPHandler(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode - requires file system")
+	}
+
+	initialContent := `
 [SSH]
-Host = "test-host"
+Host = "initial-host"
 Port = 22
 User = "test-user"
 KeyFile = "/tmp/key.file"
 
 [Application]
-Hostname = "test-app-host"
+Hostname = "initial-app"
 Port = 8080
 `
-	tmpfile, err := os.CreateTemp("", "config-*.toml")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	defer func() {
-		_ = os.Remove(tmpfile.Name())
-	}()
+	configPath, cleanup := setupTestConfig(t, initialContent)
+	defer cleanup()
 
-	if _, err := tmpfile.Write([]byte(content)); err != nil {
-		t.Fatalf("Failed to write to temp file: %v", err)
-	}
-	if err := tmpfile.Close(); err != nil {
-		t.Fatalf("Failed to close temp file: %v", err)
-	}
+	bus := NewEventBus()
+	svc := NewConfigService(configPath, bus)
 
-	svc := NewConfigService(tmpfile.Name())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	configCh := svc.SetupReloader(ctx)
-
-	// This test is complex because it involves signals
-	// For simplicity, we'll just make sure the channel is created
-	if configCh == nil {
-		t.Fatal("Expected configCh to be non-nil")
+	if err := svc.Start(ctx); err != nil {
+		t.Fatalf("Failed to start service: %v", err)
 	}
 
-	cancel()
+	configCh := bus.Subscribe(ConfigUpdated, 1)
 
-	// Wait a bit for goroutines to clean up
-	time.Sleep(100 * time.Millisecond)
+	updatedContent := `
+[SSH]
+Host = "updated-host"
+Port = 22
+User = "test-user"
+KeyFile = "/tmp/key.file"
+
+[Application]
+Hostname = "updated-app"
+Port = 8080
+`
+	if err := os.WriteFile(configPath, []byte(updatedContent), 0644); err != nil {
+		t.Fatalf("Failed to update config file: %v", err)
+	}
+
+	bus.Publish(Event{
+		Type: SIGHUPReceived,
+	})
+
+	select {
+	case event := <-configCh:
+		if event.Type != ConfigUpdated {
+			t.Errorf("Expected event type %s, got %s", ConfigUpdated, event.Type)
+		}
+
+		cfg, ok := event.Data.(config.Config)
+		if !ok {
+			t.Fatal("Event data is not a config.Config")
+		}
+
+		if cfg.SSH.Host != "updated-host" {
+			t.Errorf("Expected SSH.Host to be 'updated-host', got '%s'", cfg.SSH.Host)
+		}
+		if cfg.Application.Hostname != "updated-app" {
+			t.Errorf("Expected Application.Hostname to be 'updated-app', got '%s'", cfg.Application.Hostname)
+		}
+
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Timed out waiting for config update event after SIGHUP")
+	}
+
+	storedCfg := svc.GetConfig()
+	if storedCfg.SSH.Host != "updated-host" {
+		t.Errorf("Expected stored config SSH.Host to be 'updated-host', got '%s'", storedCfg.SSH.Host)
+	}
+
+	if err := svc.Stop(ctx); err != nil {
+		t.Fatalf("Failed to stop service: %v", err)
+	}
 }

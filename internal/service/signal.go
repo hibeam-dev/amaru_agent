@@ -2,49 +2,72 @@ package service
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"erlang-solutions.com/cortex_agent/internal/i18n"
 )
 
+const (
+	SIGHUPReceived EventType = "sighup_received"
+)
+
+const DefaultGracefulTimeout = 5 * time.Second
+
 type SignalService struct {
+	BaseService
 	gracefulTimeout time.Duration
 }
 
-func NewSignalService(gracefulTimeout time.Duration) *SignalService {
+func NewSignalService(gracefulTimeout time.Duration, bus *EventBus) *SignalService {
 	return &SignalService{
+		BaseService:     NewBaseService("signal", bus),
 		gracefulTimeout: gracefulTimeout,
 	}
 }
 
-const DefaultGracefulTimeout = 5 * time.Second
-
-func NewDefaultSignalService() *SignalService {
-	return NewSignalService(DefaultGracefulTimeout)
+func NewDefaultSignalService(bus *EventBus) *SignalService {
+	return NewSignalService(DefaultGracefulTimeout, bus)
 }
 
-func (s *SignalService) SetupTerminationHandler(parentCtx context.Context) context.Context {
-	ctx, cancel := context.WithCancel(parentCtx)
+func (s *SignalService) Start(ctx context.Context) error {
+	if err := s.BaseService.Start(ctx); err != nil {
+		return err
+	}
 
+	s.Go(func() {
+		s.handleSignals()
+	})
+	return nil
+}
+
+func (s *SignalService) handleSignals() {
 	termCh := make(chan os.Signal, 1)
+	sighupCh := make(chan os.Signal, 1)
+
 	signal.Notify(termCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sighupCh, syscall.SIGHUP)
 
-	go func() {
-		<-termCh
-		log.Println(i18n.T("termination_signal", nil))
-		cancel()
+	defer signal.Stop(termCh)
+	defer signal.Stop(sighupCh)
 
-		// Set a timeout for graceful shutdown
-		go func() {
-			time.Sleep(s.gracefulTimeout)
-			log.Println(i18n.T("forced_exit", nil))
-			os.Exit(1)
-		}()
-	}()
+	for {
+		select {
+		case <-s.Context().Done():
+			return
 
-	return ctx
+		case sig := <-termCh:
+			drainSignals(termCh)
+			s.bus.Publish(Event{Type: TerminationSignal, Data: sig})
+
+			// Set up forced exit after timeout
+			time.AfterFunc(s.gracefulTimeout, func() {
+				os.Exit(1)
+			})
+
+		case <-sighupCh:
+			drainSignals(sighupCh)
+			s.bus.Publish(Event{Type: SIGHUPReceived})
+		}
+	}
 }

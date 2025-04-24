@@ -2,152 +2,157 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"log"
+	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
 	"erlang-solutions.com/cortex_agent/internal/i18n"
 	"erlang-solutions.com/cortex_agent/internal/service"
-	"erlang-solutions.com/cortex_agent/pkg/result"
 )
 
 type App struct {
 	configService     *service.ConfigService
 	connectionService *service.ConnectionService
 	signalService     *service.SignalService
+	eventBus          *service.EventBus
 }
 
 func NewApp(configFile string, jsonMode bool) *App {
+	eventBus := service.NewEventBus()
+
 	return &App{
-		configService:     service.NewConfigService(configFile),
-		connectionService: service.NewConnectionService(jsonMode),
-		signalService:     service.NewDefaultSignalService(),
+		eventBus:          eventBus,
+		configService:     service.NewConfigService(configFile, eventBus),
+		connectionService: service.NewConnectionService(jsonMode, eventBus),
+		signalService:     service.NewDefaultSignalService(eventBus),
 	}
 }
 
 func (a *App) Run(ctx context.Context) error {
-	ctx = a.signalService.SetupTerminationHandler(ctx)
+	mainCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	configResult := result.FlatMap(
-		loadConfig(a.configService),
-		func(cfg config.Config) result.Result[config.Config] {
-			configUpdateCh := a.configService.SetupReloader(ctx)
+	if err := a.startServices(mainCtx); err != nil {
+		return err
+	}
 
-			if a.connectionService.IsJSONMode() {
-				// In JSON mode, run once and exit
-				return runOnce(ctx, a.connectionService, cfg)
-			} else {
-				// In standard mode, keep reconnecting
-				return runWithReconnect(ctx, a.connectionService, cfg, configUpdateCh)
-			}
-		},
+	cfg, err := a.configService.LoadConfig()
+	if err != nil {
+		return err
+	}
+
+	a.connectionService.SetConfig(cfg)
+	termCh := a.eventBus.Subscribe(service.TerminationSignal, 1)
+
+	if a.connectionService.IsJSONMode() {
+		return a.runOnce(mainCtx, cfg)
+	}
+	return a.runWithReconnect(mainCtx, termCh)
+}
+
+func (a *App) startServices(ctx context.Context) error {
+	services := []struct {
+		name    string
+		service service.Service
+	}{
+		{"signal", a.signalService},
+		{"config", a.configService},
+		{"connection", a.connectionService},
+	}
+
+	for _, s := range services {
+		if err := s.service.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start %s service: %w", s.name, err)
+		}
+	}
+
+	return nil
+}
+
+func (a *App) stopServices(ctx context.Context) {
+	// Stop in reverse order of startup
+	services := []struct {
+		name string
+		svc  service.Service
+	}{
+		{"connection", a.connectionService},
+		{"config", a.configService},
+		{"signal", a.signalService},
+	}
+
+	for _, s := range services {
+		if err := s.svc.Stop(ctx); err != nil {
+			// Just log errors
+			log.Printf("%s", i18n.T("service_stop_error", map[string]interface{}{
+				"Service": s.name,
+				"Error":   err,
+			}))
+		}
+	}
+}
+
+func (a *App) runOnce(ctx context.Context, cfg config.Config) error {
+	if err := a.connectionService.Connect(ctx, cfg); err != nil {
+		return err
+	}
+
+	<-ctx.Done()
+	a.stopServices(context.Background())
+	return nil
+}
+
+func (a *App) runWithReconnect(ctx context.Context, termCh <-chan service.Event) error {
+	connEvents := a.eventBus.SubscribeMultiple([]service.EventType{
+		service.ConnectionEstablished,
+		service.ConnectionClosed,
+		service.ConnectionFailed,
+		service.ReconnectRequested,
+	}, 4)
+
+	const (
+		shortDelay = 100 * time.Millisecond
+		longDelay  = 5 * time.Second
 	)
 
-	return configResult.Error()
-}
-
-func loadConfig(configService *service.ConfigService) result.Result[config.Config] {
-	cfg, err := configService.LoadConfig()
-	if err != nil {
-		msg := i18n.T("config_load_error", map[string]interface{}{"Error": err})
-		return result.Err[config.Config](fmt.Errorf("%s", msg))
-	}
-	return result.Ok(cfg)
-}
-
-func runOnce(
-	ctx context.Context,
-	connService *service.ConnectionService,
-	cfg config.Config,
-) result.Result[config.Config] {
-	err := executeConnection(ctx, connService, cfg, nil)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			log.Println(i18n.T("app_context_terminated", nil))
-			return result.Ok(cfg)
-		}
-		return result.Err[config.Config](err)
-	}
-	return result.Ok(cfg)
-}
-
-func runWithReconnect(
-	ctx context.Context,
-	connService *service.ConnectionService,
-	initialCfg config.Config,
-	configUpdateCh <-chan config.Config,
-) result.Result[config.Config] {
-	currentCfg := initialCfg
-	reconnectCh := make(chan struct{}, 1)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return result.Err[config.Config](ctx.Err())
-		case newCfg := <-configUpdateCh:
-			currentCfg = newCfg
-			select {
-			case reconnectCh <- struct{}{}:
-			default:
-				// Channel already has a pending reconnect signal
+			a.stopServices(context.Background())
+			return nil
+
+		case <-termCh:
+			a.stopServices(context.Background())
+			return nil
+
+		case event := <-connEvents:
+			switch event.Type {
+			case service.ConnectionEstablished:
+				// Connection established, nothing to do
+			case service.ConnectionClosed:
+				time.Sleep(shortDelay)
+				a.triggerReconnect()
+			case service.ConnectionFailed:
+				time.Sleep(longDelay)
+				a.triggerReconnect()
+			case service.ReconnectRequested:
+				a.triggerReconnect()
 			}
-		default:
-			log.Println(i18n.T("connection_establishing", nil))
 
-			connErr := executeConnection(ctx, connService, currentCfg, reconnectCh)
-
-			select {
-			case <-ctx.Done():
-				log.Println(i18n.T("app_terminating", nil))
-				return result.Err[config.Config](ctx.Err())
-			case <-reconnectCh:
-				log.Println(i18n.T("reconnecting", nil))
-				continue
-			default:
-				if connErr != nil {
-					msg := i18n.T("connection_error_terminating", map[string]interface{}{"Error": connErr})
-					log.Printf("%s", msg)
-					return result.Err[config.Config](connErr)
+		case <-ticker.C:
+			if !a.connectionService.HasConnection() {
+				cfg := a.connectionService.GetConfig()
+				if err := a.connectionService.Connect(ctx, cfg); err != nil {
+					time.Sleep(longDelay)
 				}
-				log.Println(i18n.T("connection_normal_termination", nil))
-				return result.Ok(currentCfg)
 			}
 		}
 	}
 }
 
-func executeConnection(
-	ctx context.Context,
-	connService *service.ConnectionService,
-	cfg config.Config,
-	reconnectCh <-chan struct{},
-) error {
-	conn, err := connService.Connect(ctx, cfg)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		log.Println(i18n.T("connection_closing", nil))
-		if closeErr := conn.Close(); closeErr != nil {
-			msg := i18n.T("connection_close_error", map[string]interface{}{"Error": closeErr})
-			log.Printf("%s", msg)
-		}
-	}()
-
-	if err := connService.SendInitialConfig(conn, cfg); err != nil {
-		return err
-	}
-
-	connCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	err = connService.Run(connCtx, conn, reconnectCh)
-	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) {
-		return err
-	}
-
-	return nil
+func (a *App) triggerReconnect() {
+	a.eventBus.Publish(service.Event{Type: service.ReconnectRequested})
 }
