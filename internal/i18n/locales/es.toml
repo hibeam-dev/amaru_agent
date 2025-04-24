@@ -170,6 +170,18 @@ other = "error al serializar la carga útil: {{.Error}}"
 [write_payload_error]
 other = "error al escribir la carga útil: {{.Error}}"
 
+[ssh_read_error]
+other = "error al leer de la conexión SSH: {{.Error}}"
+
+[stderr_reader_exiting]
+other = "Goroutine del lector de stderr finalizando"
+
+[stderr_read_error]
+other = "Error al leer stderr: {{.Error}}"
+
+[server_stderr]
+other = "Stderr del servidor: {{.Output}}"
+
 # Command-line flags and usage
 [usage_header]
 other = "Cortex Agent - Gestor de proxy remoto"
