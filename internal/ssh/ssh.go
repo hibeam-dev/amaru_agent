@@ -52,7 +52,7 @@ type AgentConfig struct {
 }
 
 func Connect(ctx context.Context, config config.Config) (Connection, error) {
-	key, err := os.ReadFile(config.SSH.KeyFile)
+	key, err := os.ReadFile(config.Connection.KeyFile)
 	if err != nil {
 		return nil, errors.WrapWithBase(errors.ErrSSHConnect,
 			i18n.T("ssh_key_error", map[string]interface{}{"Error": err}), err)
@@ -65,17 +65,17 @@ func Connect(ctx context.Context, config config.Config) (Connection, error) {
 	}
 
 	sshConfig := &ssh.ClientConfig{
-		User:            config.SSH.User,
+		User:            config.Connection.User,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		Timeout:         config.SSH.Timeout,
+		Timeout:         config.Connection.Timeout,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Use known_hosts file
 	}
 
-	addr := net.JoinHostPort(config.SSH.Host, strconv.Itoa(config.SSH.Port))
+	addr := net.JoinHostPort(config.Connection.Host, strconv.Itoa(config.Connection.Port))
 
 	msg := i18n.T("ssh_dialing", map[string]interface{}{
-		"Host": config.SSH.Host,
-		"Port": config.SSH.Port,
+		"Host": config.Connection.Host,
+		"Port": config.Connection.Port,
 	})
 	log.Printf("%s", msg)
 

@@ -101,7 +101,7 @@ nohup ./bin/cortex_agent -pid > /dev/null 2>&1 &
 ## Configuration
 
 ```toml
-[ssh]
+[connection]
 host = "localhost"       # Server hostname
 port = 22000             # Server port
 user = "agent"           # Username

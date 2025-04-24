@@ -18,7 +18,7 @@ func TestLoadConfig(t *testing.T) {
 	}()
 
 	configContent := `
-[ssh]
+[connection]
 host = "test-host"
 port = 2222
 user = "test-user"
@@ -49,18 +49,18 @@ level = "debug"
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	if cfg.SSH.Host != "test-host" {
-		t.Errorf("Expected SSH.Host to be 'test-host', got '%s'", cfg.SSH.Host)
+	if cfg.Connection.Host != "test-host" {
+		t.Errorf("Expected Connection.Host to be 'test-host', got '%s'", cfg.Connection.Host)
 	}
-	if cfg.SSH.Port != 2222 {
-		t.Errorf("Expected SSH.Port to be 2222, got %d", cfg.SSH.Port)
+	if cfg.Connection.Port != 2222 {
+		t.Errorf("Expected Connection.Port to be 2222, got %d", cfg.Connection.Port)
 	}
-	if cfg.SSH.User != "test-user" {
-		t.Errorf("Expected SSH.User to be 'test-user', got '%s'", cfg.SSH.User)
+	if cfg.Connection.User != "test-user" {
+		t.Errorf("Expected Connection.User to be 'test-user', got '%s'", cfg.Connection.User)
 	}
 	expectedTimeout := 45 * time.Second
-	if cfg.SSH.Timeout != expectedTimeout {
-		t.Errorf("Expected SSH.Timeout to be %v, got %v", expectedTimeout, cfg.SSH.Timeout)
+	if cfg.Connection.Timeout != expectedTimeout {
+		t.Errorf("Expected Connection.Timeout to be %v, got %v", expectedTimeout, cfg.Connection.Timeout)
 	}
 	if cfg.Application.Hostname != "test-app" {
 		t.Errorf("Expected Application.Hostname to be 'test-app', got '%s'", cfg.Application.Hostname)
