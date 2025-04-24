@@ -61,23 +61,21 @@ func (s *ConnectionService) GetConfig() config.Config {
 }
 
 func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.config = cfg
-
 	conn, err := ssh.Connect(ctx, cfg)
 	if err != nil {
 		s.bus.Publish(Event{Type: ConnectionFailed, Data: err})
 		return fmt.Errorf("%s", i18n.T("connection_error", map[string]interface{}{"Error": err}))
 	}
 
-	s.conn = conn
-
 	if err := s.sendConfig(conn, cfg); err != nil {
-		_ = s.conn.Close()
-		s.conn = nil
+		_ = conn.Close()
 		return err
 	}
+
+	s.mu.Lock()
+	s.config = cfg
+	s.conn = conn
+	s.mu.Unlock()
 
 	s.bus.Publish(Event{Type: ConnectionEstablished})
 	s.Go(func() {
@@ -95,14 +93,15 @@ func (s *ConnectionService) HasConnection() bool {
 
 func (s *ConnectionService) closeConnection() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	conn := s.conn
+	s.conn = nil
+	s.mu.Unlock()
 
-	if s.conn == nil {
+	if conn == nil {
 		return nil
 	}
 
-	_ = s.conn.Close()
-	s.conn = nil
+	_ = conn.Close()
 	s.bus.Publish(Event{Type: ConnectionClosed})
 
 	return nil
@@ -187,26 +186,32 @@ func (s *ConnectionService) runConnectionLoop(ctx context.Context) {
 }
 
 func (s *ConnectionService) runJSONMode(ctx context.Context, conn ssh.Connection) error {
-	heartbeatTicker := time.NewTicker(30 * time.Second)
-	defer heartbeatTicker.Stop()
-
 	errCh := make(chan error, 1)
+	heartbeatCtx, cancelHeartbeat := context.WithCancel(ctx)
+	defer cancelHeartbeat()
+
 	go func() {
 		errCh <- protocol.HandleJSONMode(ctx, conn, os.Stdin, os.Stdout)
 	}()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case err := <-errCh:
-			if err != nil && !isKnownGoodError(err) {
-				return fmt.Errorf("%s", i18n.T("json_mode_error", map[string]interface{}{"Error": err}))
+	go func() {
+		err := protocol.RunHeartbeat(heartbeatCtx, conn, 30*time.Second)
+		if err != nil && !isKnownGoodError(err) {
+			select {
+			case errCh <- fmt.Errorf("%s", i18n.T("heartbeat_error", map[string]interface{}{"Error": err})):
+			default:
 			}
-			return err
-		case <-heartbeatTicker.C:
-			_ = conn.SendPayload(map[string]string{"type": "heartbeat"})
 		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errCh:
+		if err != nil && !isKnownGoodError(err) {
+			return fmt.Errorf("%s", i18n.T("json_mode_error", map[string]interface{}{"Error": err}))
+		}
+		return err
 	}
 }
 

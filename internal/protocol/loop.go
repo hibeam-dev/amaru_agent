@@ -27,41 +27,32 @@ func RunMainLoop(ctx context.Context, conn ssh.Connection, reconnectCh <-chan st
 		return nil
 	})
 
-	heartbeatTicker := time.NewTicker(30 * time.Second)
-	defer heartbeatTicker.Stop()
-
 	g.Go(func() error {
-		for {
-			select {
-			case <-gCtx.Done():
-				return nil
-			case <-heartbeatTicker.C:
-				if err := conn.SendPayload(map[string]string{"type": "heartbeat"}); err != nil {
-					return fmt.Errorf("heartbeat failed: %w", err)
-				}
-			}
+		err := RunHeartbeat(gCtx, conn, 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("%s", i18n.T("heartbeat_error", map[string]interface{}{"Error": err}))
 		}
+		return nil
 	})
 
+	// Wait for any signal to stop
+	var result error
 	select {
 	case <-ctx.Done():
 		cancelRead()
-		_ = g.Wait()
-		return ctx.Err()
-
+		result = ctx.Err()
 	case err := <-dataErrCh:
 		cancelRead()
-		_ = g.Wait()
-		if isExpectedError(err) {
-			return nil
+		if !isExpectedError(err) {
+			result = err
 		}
-		return err
-
 	case <-reconnectCh:
 		cancelRead()
-		_ = g.Wait()
-		return nil
 	}
+
+	waitWithTimeout(g, 500*time.Millisecond)
+
+	return result
 }
 
 func readData(ctx context.Context, conn ssh.Connection, errorCh chan<- error) error {
