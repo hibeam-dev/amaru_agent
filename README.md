@@ -1,11 +1,12 @@
 # Cortex Agent
 
-A Go-based agent for `cortex` servers.
+Go reference implementation of the agent component for the Cortex reverse-TCP
+proxy system.
 
 ## Features
 
-- SSH-based secure connection with key authentication
-- TOML configuration with live reload (SIGHUP)
+- Secure server connection
+- TOML configuration with live reload
 - Background execution support
 - JSON protocol for application integration
 - Internationalization (i18n) support
@@ -53,7 +54,7 @@ make test
 │   ├── i18n/            # Internationalization
 │   ├── protocol/        # Communication protocol
 │   ├── service/         # Business logic
-│   └── ssh/             # SSH connection
+│   └── ssh/             # Connection implementation
 ├── pkg/                 # Public packages
 ├── Makefile             # Build automation
 └── config.toml          # Default config
@@ -101,11 +102,11 @@ nohup ./bin/cortex_agent -pid > /dev/null 2>&1 &
 
 ```toml
 [ssh]
-host = "localhost"       # SSH server hostname
-port = 22000             # SSH server port
-user = "agent"           # SSH username
+host = "localhost"       # Server hostname
+port = 22000             # Server port
+user = "agent"           # Username
 timeout = "30s"          # Connection timeout
-keyfile = "/path/to/key" # SSH private key path
+keyfile = "/path/to/key" # Private key path
 
 [application]
 port = 8080              # Local application port
@@ -125,14 +126,13 @@ logfile = "/path/to/log" # Log file path
 
 Two primary operating modes:
 
-1. **Standard mode**: Maintains persistent SSH connection to remote server
+1. **Standard mode**: Maintains persistent connection to remote server
 2. **JSON mode**: Facilitates message exchange between local app and server
 
 ### Design Principles
 
 - Separation of concerns with focused packages
 - Context propagation for cancellation
-- Strong error handling with Result type
 - Proper resource cleanup
 - Testable code with mocks
 - Dependency injection
@@ -141,7 +141,7 @@ Two primary operating modes:
 ## Dependencies
 
 - `github.com/BurntSushi/toml` - TOML configuration
-- `golang.org/x/crypto/ssh` - SSH client functionality
+- `golang.org/x/crypto/ssh` - Connection functionality
 - `github.com/nicksnyder/go-i18n/v2` - Internationalization
 - `golang.org/x/text` - Language detection
 
@@ -157,7 +157,6 @@ Two primary operating modes:
 8. Create Pull Request
 
 Before submitting, ensure:
-
 - All tests pass
 - Code passes linting
 - New code has appropriate test coverage
