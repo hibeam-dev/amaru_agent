@@ -1,19 +1,14 @@
 # Cortex Agent
 
-Cortex Agent is a Go-based SSH client that establishes a secure connection to a
-remote server running a custom subsystem. It acts as a communication bridge
-between local applications and a remote service, supporting JSON-based message
-passing.
+A Go-based agent for `cortex` servers.
 
 ## Features
 
-- SSH-based secure connection using key authentication
-- Configurable via TOML configuration
-- Can run in the background using standard Unix commands
-- Support for dynamic configuration reloading via SIGHUP
-- Graceful connection handling and reconnection capabilities
-- JSON protocol support for integration with external applications
-- Internationalization (i18n) support with multiple languages
+- SSH-based secure connection with key authentication
+- TOML configuration with live reload (SIGHUP)
+- Background execution support
+- JSON protocol for application integration
+- Internationalization (i18n) support
 
 ## Installation
 
@@ -29,119 +24,80 @@ cd cortex_agent
 make build
 ```
 
-The build output will be in the `bin/` directory.
+The binary will be available in the `bin/` directory.
 
-## Development Workflow
+## Development
 
-### Getting Started
+```bash
+# Clone and setup
+git clone https://github.com/Erlang-Solutions/cortex_agent.git
+cd cortex_agent
+go mod download
 
-To get started with development:
+# Install linter (recommended)
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Erlang-Solutions/cortex_agent.git
-   cd cortex_agent
-   ```
-
-2. Install dependencies:
-   ```bash
-   go mod download
-   ```
-
-3. Install the linter (optional but recommended):
-   ```bash
-   go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-   ```
-
-4. Build and test:
-   ```bash
-   make build
-   make test
-   ```
+# Build and test
+make build
+make test
+```
 
 ### Project Structure
 
 ```
-├── cmd/
-│   └── cortex_agent/       # Main application entry point
-├── internal/
-│   ├── app/                # Application orchestration
-│   ├── config/             # Configuration handling
-│   ├── daemon/             # Background process functionality
-│   ├── i18n/               # Internationalization support
-│   │   └── locales/        # Translation files
-│   ├── protocol/           # Communication protocol implementation
-│   ├── service/            # Core business logic services
-│   └── ssh/                # SSH connection management
-├── pkg/
-│   ├── errors/             # Error types and utilities
-│   └── result/             # Result type for error handling
-├── Makefile                # Build automation
-├── config.toml             # Default configuration
-└── README.md               # Documentation
+├── cmd/cortex_agent/    # Main entry point
+├── internal/            # Internal packages
+│   ├── app/             # Application core
+│   ├── config/          # Configuration
+│   ├── daemon/          # Background process
+│   ├── i18n/            # Internationalization
+│   ├── protocol/        # Communication protocol
+│   ├── service/         # Business logic
+│   └── ssh/             # SSH connection
+├── pkg/                 # Public packages
+├── Makefile             # Build automation
+└── config.toml          # Default config
 ```
 
-### Makefile Commands
-
-The project includes a Makefile with several helpful commands:
+### Make Commands
 
 ```bash
-# Build the application
-make
-
-# Run tests
-make test
-
-# Run tests with coverage statistics
-make cover
-
-# Generate HTML coverage report
-make cover-html
-
-# Format code
-make fmt
-
-# Run linter
-make lint
-
-# Clean build artifacts
-make clean
+make        # Build application
+make test   # Run tests
+make cover  # Test coverage stats
+make lint   # Run linter
+make fmt    # Format code
+make clean  # Clean artifacts
 ```
 
 ## Usage
 
-After building, you can run the agent:
-
 ```bash
-# Run with custom config, otherwise config.toml must be in the same directory
+# Basic usage
+./bin/cortex_agent
+
+# With custom config
 ./bin/cortex_agent -config=/path/to/config.toml
 
-# Run with Spanish translations
+# Use Spanish language
 LANG=es_ES.UTF-8 ./bin/cortex_agent
 
-# Run in background using standard Unix commands
+# Run in background
 nohup ./bin/cortex_agent -pid > /dev/null 2>&1 &
 ```
 
-The agent provides a clean separation between the command-line interface and the
-application logic, making it easier to embed the core functionality in other
-applications if needed.
+### Command-line Options
 
-### Command-line options
+- `-config`: Config file path (default: config.toml)
+- `-json`: Enable JSON communication mode
+- `-pid`: Write PID to ~/.cortex_agent/cortex_agent.pid
 
-- `-json`: Enable JSON communication mode for application integration
-- `-pid`: Write PID file to ~/.cortex_agent/cortex_agent.pid
-- `-config`: Path to TOML configuration file (default: config.toml)
+### Signal Handling
 
-### Signal handling
-
-The agent can be controlled with signals:
 - `SIGHUP`: Reload configuration
 - `SIGINT`/`SIGTERM`: Graceful shutdown
 
 ## Configuration
-
-Configuration is handled via a TOML file with the following sections:
 
 ```toml
 [ssh]
@@ -155,12 +111,10 @@ keyfile = "/path/to/key" # SSH private key path
 port = 8080              # Local application port
 hostname = "example.com" # Local hostname
 
-[agent]
 [agent.tags]             # Custom metadata tags
 service = "service-name"
 version = "v1.2.3"
 environment = "production"
-region = "us-east-1"
 
 [logging]
 level = "info"           # Log level
@@ -169,72 +123,46 @@ logfile = "/path/to/log" # Log file path
 
 ## Architecture
 
-The application has two primary operating modes:
+Two primary operating modes:
 
-1. **Standard mode**: Establishes and maintains a persistent SSH connection to
-   the remote server
-2. **JSON mode**: Facilitates JSON message exchange between a local application
-   and the remote server
-
-### Code Structure
-
-The codebase is organized in layers:
-
-- `cmd/cortex_agent`: Command-line interface and entry point
-- `internal/app`: Application orchestration and lifecycle management
-- `internal/config`: Configuration structure and loading
-- `internal/daemon`: PID file management
-- `internal/protocol`: Protocol handlers (JSON and standard modes)
-- `internal/service`: Core business logic services
-- `internal/ssh`: SSH connection management
-- `internal/i18n`: Internationalization support
-- `pkg/errors`: Common error types and utilities
-- `pkg/result`: Result type for error handling
+1. **Standard mode**: Maintains persistent SSH connection to remote server
+2. **JSON mode**: Facilitates message exchange between local app and server
 
 ### Design Principles
 
-The code follows these key design principles:
-
-1. **Separation of concerns**: Each package has a specific responsibility
-2. **Context propagation**: All long-running operations respect context cancellation
-3. **Error handling**: Error handling with Result type and wrapping
-4. **Resource cleanup**: Proper resource management with defer statements
-5. **Testability**: Code is structured to be testable with mock implementations
-6. **Dependency injection**: Services receive their dependencies via constructors
-7. **Interface segregation**: Small, focused interfaces for better abstraction
+- Separation of concerns with focused packages
+- Context propagation for cancellation
+- Strong error handling with Result type
+- Proper resource cleanup
+- Testable code with mocks
+- Dependency injection
+- Small, focused interfaces
 
 ## Dependencies
 
-- `github.com/BurntSushi/toml` - For parsing TOML configuration files
-- `golang.org/x/crypto/ssh` - For SSH client functionality
-- `github.com/nicksnyder/go-i18n/v2` - For internationalization support
-- `golang.org/x/text` - For language identification and text processing
-
-## License
-
-This project is licensed under the terms of the `LICENSE` file included in the
-repository.
+- `github.com/BurntSushi/toml` - TOML configuration
+- `golang.org/x/crypto/ssh` - SSH client functionality
+- `github.com/nicksnyder/go-i18n/v2` - Internationalization
+- `golang.org/x/text` - Language detection
 
 ## Contributing
 
-Contributions are welcome! Please follow these steps when contributing:
+1. Fork repository
+2. Create branch: `git checkout -b username/issue-number_feature-name`
+3. Make changes
+4. Test: `make test` and `make cover`
+5. Lint: `make lint` and `make fmt`
+6. Commit changes
+7. Push: `git push origin username/issue-number_feature-name`
+8. Create Pull Request
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b username/issue-number_your-feature-name`
-3. Make your changes
-4. Run tests: `make test`
-5. Check test coverage: `make cover`
-6. Run linter: `make lint`
-7. Format code: `make fmt`
-8. Commit your changes
-9. Push to your branch: `git push origin username/issue-number_your-feature-name`
-10. Create a Pull Request
+Before submitting, ensure:
 
-### Code Quality Standards
+- All tests pass
+- Code passes linting
+- New code has appropriate test coverage
+- Documentation is up to date
 
-Before submitting your code, please ensure:
+## License
 
-- All tests pass with `make test`
-- Code passes all linting checks with `make lint`
-- All new code has appropriate test coverage (verify with `make cover`)
-- Documentation is updated to reflect any changes
+See the `LICENSE` file for details.
