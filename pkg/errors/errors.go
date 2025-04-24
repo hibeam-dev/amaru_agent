@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	ErrConfigLoad   = errors.New("config load failed")
-	ErrSSHConnect   = errors.New("SSH connection failed")
-	ErrSSHSession   = errors.New("SSH session failed")
-	ErrSSHSubsystem = errors.New("SSH subsystem failed")
+	ErrConfigLoad       = errors.New("config load failed")
+	ErrConnectionFailed = errors.New("connection failed")
+	ErrSessionFailed    = errors.New("session failed")
+	ErrSubsystemFailed  = errors.New("subsystem failed")
 )
 
 func Wrap(err error, msg string) error {

@@ -96,7 +96,7 @@ type SessionPipes struct {
 func readKeyFile(path string) result.Result[[]byte] {
 	key, err := os.ReadFile(path)
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSSHConnect,
+		wrappedErr := errors.WrapWithBase(errors.ErrConnectionFailed,
 			i18n.T("ssh_key_error", map[string]interface{}{"Error": err}), err)
 		return result.Err[[]byte](wrappedErr)
 	}
@@ -106,7 +106,7 @@ func readKeyFile(path string) result.Result[[]byte] {
 func parsePrivateKey(key []byte) result.Result[ssh.Signer] {
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSSHConnect,
+		wrappedErr := errors.WrapWithBase(errors.ErrConnectionFailed,
 			i18n.T("ssh_key_error", map[string]interface{}{"Error": err}), err)
 		return result.Err[ssh.Signer](wrappedErr)
 	}
@@ -116,7 +116,7 @@ func parsePrivateKey(key []byte) result.Result[ssh.Signer] {
 func dialSSH(network, addr string, config *ssh.ClientConfig) result.Result[*ssh.Client] {
 	client, err := ssh.Dial(network, addr, config)
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSSHConnect,
+		wrappedErr := errors.WrapWithBase(errors.ErrConnectionFailed,
 			i18n.T("ssh_connect_failed", map[string]interface{}{"Address": addr}), err)
 		return result.Err[*ssh.Client](wrappedErr)
 	}
@@ -126,7 +126,7 @@ func dialSSH(network, addr string, config *ssh.ClientConfig) result.Result[*ssh.
 func createSession(client *ssh.Client) result.Result[*ssh.Session] {
 	session, err := client.NewSession()
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSSHSession,
+		wrappedErr := errors.WrapWithBase(errors.ErrSessionFailed,
 			i18n.T("ssh_session_failed", nil), err)
 		return result.Err[*ssh.Session](wrappedErr)
 	}
@@ -136,7 +136,7 @@ func createSession(client *ssh.Client) result.Result[*ssh.Session] {
 func requestSubsystem(session *ssh.Session, subsystem string) result.Result[struct{}] {
 	err := session.RequestSubsystem(subsystem)
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSSHSubsystem,
+		wrappedErr := errors.WrapWithBase(errors.ErrSubsystemFailed,
 			i18n.T("ssh_subsystem_failed", map[string]interface{}{"Subsystem": subsystem}), err)
 		return result.Err[struct{}](wrappedErr)
 	}
@@ -146,21 +146,21 @@ func requestSubsystem(session *ssh.Session, subsystem string) result.Result[stru
 func getPipes(session *ssh.Session) result.Result[SessionPipes] {
 	stdin, err := session.StdinPipe()
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSSHSubsystem,
+		wrappedErr := errors.WrapWithBase(errors.ErrSubsystemFailed,
 			i18n.T("ssh_stdin_failed", nil), err)
 		return result.Err[SessionPipes](wrappedErr)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSSHSubsystem,
+		wrappedErr := errors.WrapWithBase(errors.ErrSubsystemFailed,
 			i18n.T("ssh_stdout_failed", nil), err)
 		return result.Err[SessionPipes](wrappedErr)
 	}
 
 	stderr, err := session.StderrPipe()
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSSHSubsystem,
+		wrappedErr := errors.WrapWithBase(errors.ErrSubsystemFailed,
 			i18n.T("ssh_stderr_failed", nil), err)
 		return result.Err[SessionPipes](wrappedErr)
 	}

@@ -69,7 +69,7 @@ func TestSendPayload(t *testing.T) {
 func TestSendPayloadError(t *testing.T) {
 	mockConn := NewMockConnection()
 
-	mockConn.SetSendPayloadError(errors.ErrSSHSubsystem)
+	mockConn.SetSendPayloadError(errors.ErrSubsystemFailed)
 
 	payload := ConfigPayload{
 		Application: ApplicationConfig{
@@ -83,8 +83,8 @@ func TestSendPayloadError(t *testing.T) {
 		t.Fatal("Expected error, got nil")
 	}
 
-	if err != errors.ErrSSHSubsystem {
-		t.Errorf("Expected ErrSSHSubsystem, got: %v", err)
+	if err != errors.ErrSubsystemFailed {
+		t.Errorf("Expected ErrSubsystemFailed, got: %v", err)
 	}
 }
 
