@@ -47,13 +47,9 @@ func main() {
 		}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
-	// Setup signal handling for graceful shutdown
-	app.SetupTerminationHandler(ctx, cancel)
-
-	application := app.New(*configFile, *jsonMode)
+	application := app.NewApp(*configFile, *jsonMode)
 	if err := application.Run(ctx); err != nil {
 		if errors.Is(err, context.Canceled) {
 			log.Println(i18n.T("app_context_terminated", nil))

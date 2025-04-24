@@ -6,55 +6,102 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
-	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
 	"erlang-solutions.com/cortex_agent/internal/i18n"
-	"erlang-solutions.com/cortex_agent/internal/protocol"
-	"erlang-solutions.com/cortex_agent/internal/ssh"
+	"erlang-solutions.com/cortex_agent/internal/service"
+	"erlang-solutions.com/cortex_agent/pkg/result"
 )
 
 type App struct {
-	ConfigFile string
-	JSONMode   bool
+	configService     *service.ConfigService
+	connectionService *service.ConnectionService
+	signalService     *service.SignalService
 }
 
-func New(configFile string, jsonMode bool) *App {
+func NewApp(configFile string, jsonMode bool) *App {
 	return &App{
-		ConfigFile: configFile,
-		JSONMode:   jsonMode,
+		configService:     service.NewConfigService(configFile),
+		connectionService: service.NewConnectionService(jsonMode),
+		signalService:     service.NewDefaultSignalService(),
 	}
 }
 
 func (a *App) Run(ctx context.Context) error {
-	cfg, err := config.Load(a.ConfigFile)
+	ctx = a.signalService.SetupTerminationHandler(ctx)
+
+	configResult := result.FlatMap(
+		loadConfig(a.configService),
+		func(cfg config.Config) result.Result[config.Config] {
+			configUpdateCh := a.configService.SetupReloader(ctx)
+
+			if a.connectionService.IsJSONMode() {
+				// In JSON mode, run once and exit
+				return runOnce(ctx, a.connectionService, cfg)
+			} else {
+				// In standard mode, keep reconnecting
+				return runWithReconnect(ctx, a.connectionService, cfg, configUpdateCh)
+			}
+		},
+	)
+
+	return configResult.Error()
+}
+
+func loadConfig(configService *service.ConfigService) result.Result[config.Config] {
+	cfg, err := configService.LoadConfig()
 	if err != nil {
 		msg := i18n.T("config_load_error", map[string]interface{}{"Error": err})
-		return fmt.Errorf("%s", msg)
+		return result.Err[config.Config](fmt.Errorf("%s", msg))
 	}
+	return result.Ok(cfg)
+}
+
+func runOnce(
+	ctx context.Context,
+	connService *service.ConnectionService,
+	cfg config.Config,
+) result.Result[config.Config] {
+	err := executeConnection(ctx, connService, cfg, nil)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			log.Println(i18n.T("app_context_terminated", nil))
+			return result.Ok(cfg)
+		}
+		return result.Err[config.Config](err)
+	}
+	return result.Ok(cfg)
+}
+
+func runWithReconnect(
+	ctx context.Context,
+	connService *service.ConnectionService,
+	initialCfg config.Config,
+	configUpdateCh <-chan config.Config,
+) result.Result[config.Config] {
+	currentCfg := initialCfg
 	reconnectCh := make(chan struct{}, 1)
-	SetupConfigReloader(ctx, a.ConfigFile, &cfg, reconnectCh)
 
-	// In JSON mode, we run once and exit
-	if a.JSONMode {
-		return a.runConnection(ctx, cfg, reconnectCh)
-	}
-
-	// In standard mode, we keep reconnecting
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return result.Err[config.Config](ctx.Err())
+		case newCfg := <-configUpdateCh:
+			currentCfg = newCfg
+			select {
+			case reconnectCh <- struct{}{}:
+			default:
+				// Channel already has a pending reconnect signal
+			}
 		default:
 			log.Println(i18n.T("connection_establishing", nil))
 
-			connErr := a.runConnection(ctx, cfg, reconnectCh)
+			connErr := executeConnection(ctx, connService, currentCfg, reconnectCh)
 
 			select {
 			case <-ctx.Done():
 				log.Println(i18n.T("app_terminating", nil))
-				return ctx.Err()
+				return result.Err[config.Config](ctx.Err())
 			case <-reconnectCh:
 				log.Println(i18n.T("reconnecting", nil))
 				continue
@@ -62,20 +109,24 @@ func (a *App) Run(ctx context.Context) error {
 				if connErr != nil {
 					msg := i18n.T("connection_error_terminating", map[string]interface{}{"Error": connErr})
 					log.Printf("%s", msg)
-					return connErr
+					return result.Err[config.Config](connErr)
 				}
 				log.Println(i18n.T("connection_normal_termination", nil))
-				return nil
+				return result.Ok(currentCfg)
 			}
 		}
 	}
 }
 
-func (a *App) runConnection(ctx context.Context, cfg config.Config, reconnectCh <-chan struct{}) error {
-	conn, err := ssh.Connect(ctx, cfg)
+func executeConnection(
+	ctx context.Context,
+	connService *service.ConnectionService,
+	cfg config.Config,
+	reconnectCh <-chan struct{},
+) error {
+	conn, err := connService.Connect(ctx, cfg)
 	if err != nil {
-		msg := i18n.T("connection_error", map[string]interface{}{"Error": err})
-		return fmt.Errorf("%s", msg)
+		return err
 	}
 
 	defer func() {
@@ -86,80 +137,17 @@ func (a *App) runConnection(ctx context.Context, cfg config.Config, reconnectCh 
 		}
 	}()
 
-	if err := a.sendInitialConfig(conn, cfg); err != nil {
+	if err := connService.SendInitialConfig(conn, cfg); err != nil {
 		return err
 	}
 
 	connCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var protocolErr error
-	if a.JSONMode {
-		protocolErr = a.runJSONMode(connCtx, conn)
-	} else {
-		protocolErr = a.runStandardMode(connCtx, conn, reconnectCh)
-	}
-
-	if protocolErr != nil && !errors.Is(protocolErr, context.Canceled) {
-		return protocolErr
-	}
-
-	return nil
-}
-
-func (a *App) sendInitialConfig(conn ssh.Connection, cfg config.Config) error {
-	payload := ssh.ConfigPayload{
-		Application: ssh.ApplicationConfig{
-			Hostname: cfg.Application.Hostname,
-			Port:     cfg.Application.Port,
-		},
-		Agent: ssh.AgentConfig{
-			Tags: cfg.Agent.Tags,
-		},
-	}
-
-	if err := conn.SendPayload(payload); err != nil {
-		msg := i18n.T("config_send_error", map[string]interface{}{"Error": err})
-		return fmt.Errorf("%s", msg)
-	}
-	return nil
-}
-
-func (a *App) runJSONMode(ctx context.Context, conn ssh.Connection) error {
-	heartbeatTicker := time.NewTicker(30 * time.Second)
-	defer heartbeatTicker.Stop()
-
-	errCh := make(chan error, 1)
-	go func() {
-		err := protocol.HandleJSONMode(ctx, conn, os.Stdin, os.Stdout)
-		errCh <- err
-	}()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case err := <-errCh:
-			if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) {
-				msg := i18n.T("json_mode_error", map[string]interface{}{"Error": err})
-				return fmt.Errorf("%s", msg)
-			}
-			return err
-		case <-heartbeatTicker.C:
-			err := conn.SendPayload(map[string]string{"type": "heartbeat"})
-			if err != nil {
-				msg := i18n.T("heartbeat_error", map[string]interface{}{"Error": err})
-				log.Printf("%s", msg)
-			}
-		}
-	}
-}
-
-func (a *App) runStandardMode(ctx context.Context, conn ssh.Connection, reconnectCh <-chan struct{}) error {
-	err := protocol.RunMainLoop(ctx, conn, reconnectCh)
+	err = connService.Run(connCtx, conn, reconnectCh)
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) {
-		msg := i18n.T("main_loop_error", map[string]interface{}{"Error": err})
-		return fmt.Errorf("%s", msg)
+		return err
 	}
+
 	return nil
 }
