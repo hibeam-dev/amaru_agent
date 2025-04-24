@@ -65,15 +65,17 @@ To get started with development:
 ├── cmd/
 │   └── cortex_agent/       # Main application entry point
 ├── internal/
-│   ├── app/                # Core application logic
+│   ├── app/                # Application orchestration
 │   ├── config/             # Configuration handling
 │   ├── daemon/             # Background process functionality
 │   ├── i18n/               # Internationalization support
 │   │   └── locales/        # Translation files
 │   ├── protocol/           # Communication protocol implementation
+│   ├── service/            # Core business logic services
 │   └── ssh/                # SSH connection management
 ├── pkg/
-│   └── errors/             # Error types and utilities
+│   ├── errors/             # Error types and utilities
+│   └── result/             # Result type for error handling
 ├── Makefile                # Build automation
 ├── config.toml             # Default configuration
 └── README.md               # Documentation
@@ -179,24 +181,27 @@ The application has two primary operating modes:
 The codebase is organized in layers:
 
 - `cmd/cortex_agent`: Command-line interface and entry point
-- `internal/app`: Core application logic and coordination
-- `internal/config`: Configuration handling
+- `internal/app`: Application orchestration and lifecycle management
+- `internal/config`: Configuration structure and loading
 - `internal/daemon`: PID file management
 - `internal/protocol`: Protocol handlers (JSON and standard modes)
+- `internal/service`: Core business logic services
 - `internal/ssh`: SSH connection management
 - `internal/i18n`: Internationalization support
 - `pkg/errors`: Common error types and utilities
+- `pkg/result`: Result type for error handling
 
 ### Design Principles
 
 The code follows these key design principles:
 
 1. **Separation of concerns**: Each package has a specific responsibility
-2. **Context propagation**: All long-running operations respect context
-   cancellation
-3. **Error handling**: Explicit error types and proper error wrapping
+2. **Context propagation**: All long-running operations respect context cancellation
+3. **Error handling**: Error handling with Result type and wrapping
 4. **Resource cleanup**: Proper resource management with defer statements
 5. **Testability**: Code is structured to be testable with mock implementations
+6. **Dependency injection**: Services receive their dependencies via constructors
+7. **Interface segregation**: Small, focused interfaces for better abstraction
 
 ## Dependencies
 
