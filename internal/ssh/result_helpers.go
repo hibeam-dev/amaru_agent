@@ -13,22 +13,19 @@ import (
 	"erlang-solutions.com/cortex_agent/internal/config"
 	"erlang-solutions.com/cortex_agent/internal/i18n"
 	"erlang-solutions.com/cortex_agent/pkg/errors"
-	"erlang-solutions.com/cortex_agent/pkg/result"
 	"golang.org/x/crypto/ssh"
 )
 
-func ConnectResult(ctx context.Context, cfg config.Config) result.Result[Connection] {
-	keyResult := readKeyFile(cfg.Connection.KeyFile)
-	if keyResult.IsErr() {
-		return result.Err[Connection](keyResult.Error())
+func ConnectWithHelpers(ctx context.Context, cfg config.Config) (Connection, error) {
+	key, err := readKeyFile(cfg.Connection.KeyFile)
+	if err != nil {
+		return nil, err
 	}
-	key := keyResult.Value()
 
-	signerResult := parsePrivateKey(key)
-	if signerResult.IsErr() {
-		return result.Err[Connection](signerResult.Error())
+	signer, err := parsePrivateKey(key)
+	if err != nil {
+		return nil, err
 	}
-	signer := signerResult.Value()
 
 	sshConfig := &ssh.ClientConfig{
 		User:            cfg.Connection.User,
@@ -45,36 +42,33 @@ func ConnectResult(ctx context.Context, cfg config.Config) result.Result[Connect
 	})
 	log.Printf("%s", msg)
 
-	clientResult := dialSSH("tcp", addr, sshConfig)
-	if clientResult.IsErr() {
-		return result.Err[Connection](clientResult.Error())
+	client, err := dialSSH("tcp", addr, sshConfig)
+	if err != nil {
+		return nil, err
 	}
-	client := clientResult.Value()
 
 	log.Println(i18n.T("ssh_connection_established", nil))
 	log.Println(i18n.T("ssh_server_auth", nil))
 
-	sessionResult := createSession(client)
-	if sessionResult.IsErr() {
+	session, err := createSession(client)
+	if err != nil {
 		_ = client.Close()
-		return result.Err[Connection](sessionResult.Error())
-	}
-	session := sessionResult.Value()
-
-	subsystemResult := requestSubsystem(session, Subsystem)
-	if subsystemResult.IsErr() {
-		_ = session.Close()
-		_ = client.Close()
-		return result.Err[Connection](subsystemResult.Error())
+		return nil, err
 	}
 
-	pipeResult := getPipes(session)
-	if pipeResult.IsErr() {
+	err = requestSubsystem(session, Subsystem)
+	if err != nil {
 		_ = session.Close()
 		_ = client.Close()
-		return result.Err[Connection](pipeResult.Error())
+		return nil, err
 	}
-	pipes := pipeResult.Value()
+
+	pipes, err := getPipes(session)
+	if err != nil {
+		_ = session.Close()
+		_ = client.Close()
+		return nil, err
+	}
 
 	conn := &Conn{
 		client:  client,
@@ -84,7 +78,7 @@ func ConnectResult(ctx context.Context, cfg config.Config) result.Result[Connect
 		stderr:  pipes.stderr,
 	}
 
-	return result.Ok[Connection](conn)
+	return conn, nil
 }
 
 type SessionPipes struct {
@@ -93,96 +87,88 @@ type SessionPipes struct {
 	stderr io.Reader
 }
 
-func readKeyFile(path string) result.Result[[]byte] {
+func readKeyFile(path string) ([]byte, error) {
 	key, err := os.ReadFile(path)
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrConnectionFailed,
+		return nil, errors.WrapWithBase(errors.ErrConnectionFailed,
 			i18n.T("ssh_key_error", map[string]interface{}{"Error": err}), err)
-		return result.Err[[]byte](wrappedErr)
 	}
-	return result.Ok(key)
+	return key, nil
 }
 
-func parsePrivateKey(key []byte) result.Result[ssh.Signer] {
+func parsePrivateKey(key []byte) (ssh.Signer, error) {
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrConnectionFailed,
+		return nil, errors.WrapWithBase(errors.ErrConnectionFailed,
 			i18n.T("ssh_key_error", map[string]interface{}{"Error": err}), err)
-		return result.Err[ssh.Signer](wrappedErr)
 	}
-	return result.Ok(signer)
+	return signer, nil
 }
 
-func dialSSH(network, addr string, config *ssh.ClientConfig) result.Result[*ssh.Client] {
+func dialSSH(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
 	client, err := ssh.Dial(network, addr, config)
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrConnectionFailed,
+		return nil, errors.WrapWithBase(errors.ErrConnectionFailed,
 			i18n.T("ssh_connect_failed", map[string]interface{}{"Address": addr}), err)
-		return result.Err[*ssh.Client](wrappedErr)
 	}
-	return result.Ok(client)
+	return client, nil
 }
 
-func createSession(client *ssh.Client) result.Result[*ssh.Session] {
+func createSession(client *ssh.Client) (*ssh.Session, error) {
 	session, err := client.NewSession()
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSessionFailed,
+		return nil, errors.WrapWithBase(errors.ErrSessionFailed,
 			i18n.T("ssh_session_failed", nil), err)
-		return result.Err[*ssh.Session](wrappedErr)
 	}
-	return result.Ok(session)
+	return session, nil
 }
 
-func requestSubsystem(session *ssh.Session, subsystem string) result.Result[struct{}] {
+func requestSubsystem(session *ssh.Session, subsystem string) error {
 	err := session.RequestSubsystem(subsystem)
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSubsystemFailed,
+		return errors.WrapWithBase(errors.ErrSubsystemFailed,
 			i18n.T("ssh_subsystem_failed", map[string]interface{}{"Subsystem": subsystem}), err)
-		return result.Err[struct{}](wrappedErr)
 	}
-	return result.Ok(struct{}{})
+	return nil
 }
 
-func getPipes(session *ssh.Session) result.Result[SessionPipes] {
+func getPipes(session *ssh.Session) (SessionPipes, error) {
 	stdin, err := session.StdinPipe()
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSubsystemFailed,
+		return SessionPipes{}, errors.WrapWithBase(errors.ErrSubsystemFailed,
 			i18n.T("ssh_stdin_failed", nil), err)
-		return result.Err[SessionPipes](wrappedErr)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSubsystemFailed,
+		return SessionPipes{}, errors.WrapWithBase(errors.ErrSubsystemFailed,
 			i18n.T("ssh_stdout_failed", nil), err)
-		return result.Err[SessionPipes](wrappedErr)
 	}
 
 	stderr, err := session.StderrPipe()
 	if err != nil {
-		wrappedErr := errors.WrapWithBase(errors.ErrSubsystemFailed,
+		return SessionPipes{}, errors.WrapWithBase(errors.ErrSubsystemFailed,
 			i18n.T("ssh_stderr_failed", nil), err)
-		return result.Err[SessionPipes](wrappedErr)
 	}
 
-	return result.Ok(SessionPipes{
+	return SessionPipes{
 		stdin:  stdin,
 		stdout: stdout,
 		stderr: stderr,
-	})
+	}, nil
 }
 
-func SendPayloadResult[T any](conn Connection, payload T) result.Result[struct{}] {
+func SendPayload[T any](conn Connection, payload T) error {
 	if err := conn.SendPayload(payload); err != nil {
-		return result.Err[struct{}](fmt.Errorf("failed to send payload: %w", err))
+		return fmt.Errorf("failed to send payload: %w", err)
 	}
-	return result.Ok(struct{}{})
+	return nil
 }
 
-func ParseJSONResult[T any](data []byte) result.Result[T] {
+func ParseJSON[T any](data []byte) (T, error) {
 	var parsed T
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		return result.Err[T](fmt.Errorf("failed to parse JSON: %w", err))
+		return parsed, fmt.Errorf("failed to parse JSON: %w", err)
 	}
-	return result.Ok(parsed)
+	return parsed, nil
 }
