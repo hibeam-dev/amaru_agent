@@ -13,13 +13,11 @@ import (
 func TestConnClose(t *testing.T) {
 	conn := &Conn{}
 
-	// First close should work fine
 	err := conn.Close()
 	if err != nil {
 		t.Errorf("First close returned error: %v", err)
 	}
 
-	// Second close should also work (idempotent operation)
 	err = conn.Close()
 	if err != nil {
 		t.Errorf("Second close returned error: %v", err)

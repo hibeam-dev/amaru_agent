@@ -52,9 +52,9 @@ func main() {
 	application := app.NewApp(*configFile, *jsonMode)
 	if err := application.Run(ctx); err != nil {
 		if errors.Is(err, context.Canceled) {
-			log.Println(i18n.T("app_context_terminated", nil))
+			log.Println(i18n.T("app_terminated", map[string]interface{}{"Reason": "context cancellation"}))
 		} else {
-			log.Fatalf(i18n.Tf("app_error", nil), i18n.T("app_error", map[string]interface{}{"Error": err}))
+			log.Fatalf("%s", i18n.T("app_error", map[string]interface{}{"Error": err}))
 		}
 	}
 }
