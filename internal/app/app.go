@@ -81,8 +81,11 @@ func (a *App) stopServices(ctx context.Context) {
 		{"signal", a.signalService},
 	}
 
+	stopCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
 	for _, s := range services {
-		if err := s.svc.Stop(ctx); err != nil {
+		if err := s.svc.Stop(stopCtx); err != nil {
 			// Just log errors
 			log.Printf("%s", i18n.T("service_stop_error", map[string]interface{}{
 				"Service": s.name,

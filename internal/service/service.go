@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 type Service interface {
@@ -34,8 +35,19 @@ func (s *BaseService) Stop(ctx context.Context) error {
 	if s.cancel != nil {
 		s.cancel()
 	}
-	s.wg.Wait()
-	return nil
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		waitWithTimeout(&s.wg, 500*time.Millisecond)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *BaseService) Context() context.Context {
