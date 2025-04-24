@@ -52,7 +52,7 @@ func readData(ctx context.Context, conn ssh.Connection, errorCh chan<- error) {
 					return
 				}
 				select {
-				case errorCh <- fmt.Errorf("failed to read from SSH connection: %w", err):
+				case errorCh <- fmt.Errorf("%s", i18n.T("ssh_read_error", map[string]interface{}{"Error": err})):
 				case <-ctx.Done():
 				}
 				return

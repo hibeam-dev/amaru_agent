@@ -6,11 +6,12 @@ import (
 	"io"
 	"log"
 
+	"erlang-solutions.com/cortex_agent/internal/i18n"
 	"erlang-solutions.com/cortex_agent/internal/ssh"
 )
 
 func readStderr(ctx context.Context, conn ssh.Connection) {
-	defer log.Println("Stderr reader goroutine exiting")
+	defer log.Println(i18n.T("stderr_reader_exiting", nil))
 
 	buffer := make([]byte, 4096)
 	for {
@@ -23,11 +24,11 @@ func readStderr(ctx context.Context, conn ssh.Connection) {
 				if isExpectedError(err) {
 					return
 				}
-				log.Printf("Error reading stderr: %v", err)
+				log.Printf(i18n.Tf("stderr_read_error", nil), i18n.T("stderr_read_error", map[string]interface{}{"Error": err}))
 				return
 			}
 			if n > 0 {
-				log.Printf("Server stderr: %s", string(buffer[:n]))
+				log.Printf(i18n.Tf("server_stderr", nil), i18n.T("server_stderr", map[string]interface{}{"Output": string(buffer[:n])}))
 			}
 		}
 	}

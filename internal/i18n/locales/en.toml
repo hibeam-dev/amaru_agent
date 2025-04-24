@@ -170,6 +170,18 @@ other = "failed to marshal payload: {{.Error}}"
 [write_payload_error]
 other = "failed to write payload: {{.Error}}"
 
+[ssh_read_error]
+other = "failed to read from SSH connection: {{.Error}}"
+
+[stderr_reader_exiting]
+other = "Stderr reader goroutine exiting"
+
+[stderr_read_error]
+other = "Error reading stderr: {{.Error}}"
+
+[server_stderr]
+other = "Server stderr: {{.Output}}"
+
 # Command-line flags and usage
 [usage_header]
 other = "Cortex Agent - Remote proxy manager"
