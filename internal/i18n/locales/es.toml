@@ -1,13 +1,7 @@
 # Spanish translations
 
-[connection_establishing]
-other = "Estableciendo conexión al servidor cortex..."
-
 [connection_error]
 other = "Error de conexión: {{.Error}}"
-
-[connection_closing]
-other = "Cerrando conexión al servidor cortex..."
 
 [connection_close_error]
 other = "Error al cerrar la conexión: {{.Error}}"
@@ -24,12 +18,6 @@ other = "Error al enviar latido: {{.Error}}"
 [reconnecting]
 other = "Reconectando debido al cambio de configuración..."
 
-[connection_error_terminating]
-other = "Conexión terminada con error: {{.Error}}"
-
-[connection_normal_termination]
-other = "Conexión terminada normalmente, saliendo"
-
 [json_mode_error]
 other = "Error en modo JSON: {{.Error}}"
 
@@ -44,10 +32,6 @@ other = "Conectando con el servidor cortex {{.Host}}:{{.Port}}..."
 
 [ssh_connection_established]
 other = "Conexión con el servidor cortex establecida"
-
-
-[ssh_server_auth]
-other = "Autenticando en el servidor usando clave pública"
 
 # Main application messages
 [i18n_init_error]
@@ -107,8 +91,6 @@ other = "Error de conexión: {{.Error}}"
 [reconnection_requested]
 other = "Reconexión solicitada"
 
-
-
 [decode_error]
 other = "Error al decodificar la respuesta del servidor: {{.Error}}"
 
@@ -118,14 +100,11 @@ other = "Respuesta recibida del servidor: {{.Response}}"
 [json_shutdown]
 other = "Contexto cancelado, apagando modo JSON..."
 
-
-
 [response_no_writer]
 other = "Respuesta recibida (sin escritor de salida): {{.Response}}"
 
 [response_timeout]
 other = "Tiempo de espera agotado para la respuesta"
-
 
 # SSH connection
 [ssh_connect_failed]
@@ -174,9 +153,8 @@ other = "Error al serializar los datos: {{.Error}}"
 [write_payload_error]
 other = "Error al enviar los datos: {{.Error}}"
 
-[ssh_read_error]
+[transport_read_error]
 other = "Error al leer datos de la conexión: {{.Error}}"
-
 
 [stderr_read_error]
 other = "Error al leer stderr: {{.Error}}"
@@ -194,11 +172,6 @@ other = "Conexión fallida"
 [app_termination_signal]
 other = "Señal de terminación recibida, apagando la aplicación"
 
-[ssh_stderr_error]
-other = "Error al leer desde stderr: {{.Error}}"
-
-[stderr_received]
-other = "Recibido desde stderr: {{.Data}}"
 
 [service_stop_error]
 other = "Error al detener el servicio de {{.Service}}: {{.Error}}"

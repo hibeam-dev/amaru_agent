@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
+	"erlang-solutions.com/cortex_agent/internal/event"
 )
 
 const testConfigContent = `
@@ -57,7 +58,7 @@ func TestConfigService_LoadConfig(t *testing.T) {
 	configPath, cleanup := setupTestConfig(t, testConfigContent)
 	defer cleanup()
 
-	bus := NewEventBus()
+	bus := event.NewBus()
 	svc := NewConfigService(configPath, bus)
 
 	cfg, err := svc.LoadConfig()
@@ -89,7 +90,7 @@ func TestConfigService_LoadConfig(t *testing.T) {
 
 func TestConfigService_StartStop(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "config.toml")
-	bus := NewEventBus()
+	bus := event.NewBus()
 	svc := NewConfigService(tmpFile, bus)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -105,7 +106,7 @@ func TestConfigService_StartStop(t *testing.T) {
 }
 
 func TestConfigService_GetSetConfig(t *testing.T) {
-	bus := NewEventBus()
+	bus := event.NewBus()
 	svc := NewConfigService("config.toml", bus)
 
 	testCfg := config.Config{}
@@ -135,26 +136,27 @@ func TestConfigService_ReloadAndPublishConfig(t *testing.T) {
 	configPath, cleanup := setupTestConfig(t, testConfigContent)
 	defer cleanup()
 
-	bus := NewEventBus()
+	bus := event.NewBus()
 	svc := NewConfigService(configPath, bus)
 
-	configChan := bus.Subscribe(ConfigUpdated, 1)
+	var receivedConfig config.Config
+	configReceived := make(chan struct{})
+
+	unsub := bus.Subscribe(event.ConfigUpdated, func(evt event.Event) {
+		cfg, ok := evt.Data.(config.Config)
+		if ok {
+			receivedConfig = cfg
+			close(configReceived)
+		}
+	})
+	defer unsub()
 
 	svc.reloadAndPublishConfig()
 
 	select {
-	case event := <-configChan:
-		if event.Type != ConfigUpdated {
-			t.Errorf("Expected event type %s, got %s", ConfigUpdated, event.Type)
-		}
-
-		cfg, ok := event.Data.(config.Config)
-		if !ok {
-			t.Fatal("Event data is not a config.Config")
-		}
-
-		if cfg.Connection.Host != "test-host" {
-			t.Errorf("Expected Connection.Host to be 'test-host', got '%s'", cfg.Connection.Host)
+	case <-configReceived:
+		if receivedConfig.Connection.Host != "test-host" {
+			t.Errorf("Expected Connection.Host to be 'test-host', got '%s'", receivedConfig.Connection.Host)
 		}
 
 	case <-time.After(500 * time.Millisecond):
@@ -186,7 +188,7 @@ Port = 8080
 	configPath, cleanup := setupTestConfig(t, initialContent)
 	defer cleanup()
 
-	bus := NewEventBus()
+	bus := event.NewBus()
 	svc := NewConfigService(configPath, bus)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -196,7 +198,17 @@ Port = 8080
 		t.Fatalf("Failed to start service: %v", err)
 	}
 
-	configCh := bus.Subscribe(ConfigUpdated, 1)
+	var receivedConfig config.Config
+	configReceived := make(chan struct{})
+
+	unsub := bus.Subscribe(event.ConfigUpdated, func(evt event.Event) {
+		cfg, ok := evt.Data.(config.Config)
+		if ok {
+			receivedConfig = cfg
+			close(configReceived)
+		}
+	})
+	defer unsub()
 
 	updatedContent := `
 [Connection]
@@ -213,26 +225,17 @@ Port = 8080
 		t.Fatalf("Failed to update config file: %v", err)
 	}
 
-	bus.Publish(Event{
-		Type: SIGHUPReceived,
+	bus.Publish(event.Event{
+		Type: event.SIGHUPReceived,
 	})
 
 	select {
-	case event := <-configCh:
-		if event.Type != ConfigUpdated {
-			t.Errorf("Expected event type %s, got %s", ConfigUpdated, event.Type)
+	case <-configReceived:
+		if receivedConfig.Connection.Host != "updated-host" {
+			t.Errorf("Expected Connection.Host to be 'updated-host', got '%s'", receivedConfig.Connection.Host)
 		}
-
-		cfg, ok := event.Data.(config.Config)
-		if !ok {
-			t.Fatal("Event data is not a config.Config")
-		}
-
-		if cfg.Connection.Host != "updated-host" {
-			t.Errorf("Expected Connection.Host to be 'updated-host', got '%s'", cfg.Connection.Host)
-		}
-		if cfg.Application.Hostname != "updated-app" {
-			t.Errorf("Expected Application.Hostname to be 'updated-app', got '%s'", cfg.Application.Hostname)
+		if receivedConfig.Application.Hostname != "updated-app" {
+			t.Errorf("Expected Application.Hostname to be 'updated-app', got '%s'", receivedConfig.Application.Hostname)
 		}
 
 	case <-time.After(500 * time.Millisecond):

@@ -7,19 +7,23 @@ import (
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
+	"erlang-solutions.com/cortex_agent/internal/event"
 	"erlang-solutions.com/cortex_agent/internal/i18n"
 	"erlang-solutions.com/cortex_agent/internal/service"
+
+	// Import SSH package to register it
+	_ "erlang-solutions.com/cortex_agent/internal/ssh"
 )
 
 type App struct {
 	configService     *service.ConfigService
 	connectionService *service.ConnectionService
 	signalService     *service.SignalService
-	eventBus          *service.EventBus
+	eventBus          *event.Bus
 }
 
 func NewApp(configFile string, jsonMode bool) *App {
-	eventBus := service.NewEventBus()
+	eventBus := event.NewBus()
 
 	return &App{
 		eventBus:          eventBus,
@@ -43,12 +47,17 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	a.connectionService.SetConfig(cfg)
-	termCh := a.eventBus.Subscribe(service.TerminationSignal, 1)
+
+	var terminationReceived bool
+	terminationSub := a.eventBus.Subscribe(event.TerminationSignal, func(evt event.Event) {
+		terminationReceived = true
+	})
+	defer a.eventBus.Unsubscribe(terminationSub)
 
 	if a.connectionService.IsJSONMode() {
 		return a.runOnce(mainCtx, cfg)
 	}
-	return a.runWithReconnect(mainCtx, termCh)
+	return a.runWithReconnect(mainCtx, &terminationReceived)
 }
 
 func (a *App) startServices(ctx context.Context) error {
@@ -105,18 +114,39 @@ func (a *App) runOnce(ctx context.Context, cfg config.Config) error {
 	return nil
 }
 
-func (a *App) runWithReconnect(ctx context.Context, termCh <-chan service.Event) error {
-	connEvents := a.eventBus.SubscribeMultiple([]service.EventType{
-		service.ConnectionEstablished,
-		service.ConnectionClosed,
-		service.ConnectionFailed,
-		service.ReconnectRequested,
-	}, 4)
-
+func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 	const (
 		shortDelay = 100 * time.Millisecond
 		longDelay  = 5 * time.Second
 	)
+
+	connSubs := a.eventBus.SubscribeMultiple(
+		[]string{
+			event.ConnectionEstablished,
+			event.ConnectionClosed,
+			event.ConnectionFailed,
+			event.ReconnectRequested,
+		},
+		func(evt event.Event) {
+			switch evt.Type {
+			case event.ConnectionClosed:
+				time.Sleep(shortDelay)
+				a.triggerReconnect()
+			case event.ConnectionFailed:
+				time.Sleep(longDelay)
+				a.triggerReconnect()
+			case event.ReconnectRequested:
+				a.triggerReconnect()
+			}
+		},
+	)
+
+	// Clean up all subscriptions when done
+	defer func() {
+		for _, unsub := range connSubs {
+			unsub()
+		}
+	}()
 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
@@ -127,25 +157,12 @@ func (a *App) runWithReconnect(ctx context.Context, termCh <-chan service.Event)
 			a.stopServices(context.Background())
 			return nil
 
-		case <-termCh:
-			a.stopServices(context.Background())
-			return nil
-
-		case event := <-connEvents:
-			switch event.Type {
-			case service.ConnectionEstablished:
-				// Connection established, nothing to do
-			case service.ConnectionClosed:
-				time.Sleep(shortDelay)
-				a.triggerReconnect()
-			case service.ConnectionFailed:
-				time.Sleep(longDelay)
-				a.triggerReconnect()
-			case service.ReconnectRequested:
-				a.triggerReconnect()
+		case <-ticker.C:
+			if *terminated {
+				a.stopServices(context.Background())
+				return nil
 			}
 
-		case <-ticker.C:
 			if !a.connectionService.HasConnection() {
 				cfg := a.connectionService.GetConfig()
 				if err := a.connectionService.Connect(ctx, cfg); err != nil {
@@ -157,5 +174,5 @@ func (a *App) runWithReconnect(ctx context.Context, termCh <-chan service.Event)
 }
 
 func (a *App) triggerReconnect() {
-	a.eventBus.Publish(service.Event{Type: service.ReconnectRequested})
+	a.eventBus.Publish(event.Event{Type: event.ReconnectRequested})
 }

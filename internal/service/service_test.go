@@ -2,116 +2,84 @@ package service
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
+
+	"erlang-solutions.com/cortex_agent/internal/event"
 )
 
-func TestBaseService(t *testing.T) {
-	bus := NewEventBus()
-	svc := NewBaseService("test", bus)
+type MockService struct {
+	name     string
+	bus      *event.Bus
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+	executed chan struct{}
+}
+
+func NewMockService(name string, bus *event.Bus) *MockService {
+	return &MockService{
+		name:     name,
+		bus:      bus,
+		executed: make(chan struct{}),
+	}
+}
+
+func (s *MockService) Start(ctx context.Context) error {
+	s.ctx, s.cancel = context.WithCancel(ctx)
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		close(s.executed)
+	}()
+
+	return nil
+}
+
+func (s *MockService) Stop(ctx context.Context) error {
+	if s.cancel != nil {
+		s.cancel()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.wg.Wait()
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(100 * time.Millisecond):
+		return nil
+	}
+}
+
+func TestServiceInterface(t *testing.T) {
+	bus := event.NewBus()
+	svc := NewMockService("test", bus)
+
+	var _ Service = svc
 
 	ctx := context.Background()
 	err := svc.Start(ctx)
 	if err != nil {
-		t.Errorf("Start returned error: %v", err)
+		t.Fatalf("Start returned error: %v", err)
 	}
-
-	if svc.Context() == nil {
-		t.Error("Context is nil after Start")
-	}
-
-	executed := make(chan struct{})
-	svc.Go(func() {
-		close(executed)
-	})
 
 	select {
-	case <-executed:
-		// Good
+	case <-svc.executed:
+		// Success path
 	case <-time.After(100 * time.Millisecond):
-		t.Error("Go function was not executed")
+		t.Fatal("Function was not executed within timeout")
 	}
 
 	err = svc.Stop(ctx)
 	if err != nil {
-		t.Errorf("Stop returned error: %v", err)
-	}
-}
-
-func TestEventBusPublishAndSubscribe(t *testing.T) {
-	bus := NewEventBus()
-
-	ch1 := bus.Subscribe("test_event", 1)
-	ch2 := bus.Subscribe("test_event", 1)
-	ch3 := bus.Subscribe("other_event", 1)
-
-	bus.Publish(Event{
-		Type: "test_event",
-		Data: "test data",
-	})
-
-	expectEvent(t, ch1, "test_event", "test data")
-	expectEvent(t, ch2, "test_event", "test data")
-	expectNoEvent(t, ch3)
-
-	bus.Publish(Event{
-		Type: "other_event",
-		Data: 123,
-	})
-
-	expectEvent(t, ch3, "other_event", 123)
-
-	bus.Close()
-
-	if _, ok := <-ch1; ok {
-		t.Error("Expected ch1 to be closed")
-	}
-	if _, ok := <-ch2; ok {
-		t.Error("Expected ch2 to be closed")
-	}
-	if _, ok := <-ch3; ok {
-		t.Error("Expected ch3 to be closed")
-	}
-}
-
-func TestEventBusSubscribeMultiple(t *testing.T) {
-	bus := NewEventBus()
-
-	events := []EventType{"event1", "event2", "event3"}
-	ch := bus.SubscribeMultiple(events, 3)
-
-	for _, eventType := range events {
-		bus.Publish(Event{
-			Type: eventType,
-			Data: string(eventType) + "_data",
-		})
-		expectEvent(t, ch, eventType, string(eventType)+"_data")
-	}
-
-	// Bus closed in TestEventBusPublishAndSubscribe
-}
-
-func expectEvent[T comparable](t *testing.T, ch <-chan Event, expectedType EventType, expectedData T) {
-	t.Helper()
-	select {
-	case event := <-ch:
-		if event.Type != expectedType {
-			t.Errorf("Expected event type %q, got %q", expectedType, event.Type)
-		}
-		if data, ok := event.Data.(T); !ok || data != expectedData {
-			t.Errorf("Expected event data %v, got %v", expectedData, event.Data)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Errorf("Timeout waiting for event of type %q", expectedType)
-	}
-}
-
-func expectNoEvent(t *testing.T, ch <-chan Event) {
-	t.Helper()
-	select {
-	case event := <-ch:
-		t.Errorf("Expected no event, but received: %v", event)
-	case <-time.After(100 * time.Millisecond):
-		// This is expected - no event should be received
+		t.Fatalf("Stop returned error: %v", err)
 	}
 }

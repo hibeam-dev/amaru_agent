@@ -6,6 +6,5 @@ import "embed"
 var LocaleFS embed.FS
 
 func InitDefaultFS() error {
-	lang := DetectLanguage()
-	return InitWithFS(LocaleFS, lang)
+	return InitWithFS(LocaleFS, DetectLanguage())
 }

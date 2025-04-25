@@ -13,16 +13,8 @@ var (
 	ErrSubsystemFailed  = errors.New("subsystem failed")
 )
 
-func Wrap(err error, msg string) error {
-	return fmt.Errorf("%s: %w", msg, err)
-}
-
 func WrapWithBase(base error, msg string, err error) error {
 	return fmt.Errorf("%w: %s: %v", base, msg, err)
-}
-
-func New(text string) error {
-	return errors.New(text)
 }
 
 // Returns an error that wraps the given errors

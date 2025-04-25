@@ -10,4 +10,7 @@ require (
 	golang.org/x/text v0.24.0
 )
 
-require golang.org/x/sys v0.32.0 // indirect
+require (
+	github.com/maniartech/signals v1.2.0 // indirect
+	golang.org/x/sys v0.32.0 // indirect
+)

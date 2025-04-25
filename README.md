@@ -51,10 +51,13 @@ make test
 │   ├── app/             # Application core
 │   ├── config/          # Configuration
 │   ├── daemon/          # Background process
+│   ├── event/           # Event pub/sub system
 │   ├── i18n/            # Internationalization
 │   ├── protocol/        # Communication protocol
 │   ├── service/         # Business logic
-│   └── ssh/             # Connection implementation
+│   ├── ssh/             # SSH connection implementation
+│   ├── transport/       # Connection interfaces and abstractions
+│   └── util/            # Shared utilities
 ├── pkg/                 # Public packages
 ├── Makefile             # Build automation
 └── config.toml          # Default config
@@ -144,6 +147,7 @@ Two primary operating modes:
 - `golang.org/x/crypto/ssh` - Connection functionality
 - `github.com/nicksnyder/go-i18n/v2` - Internationalization
 - `golang.org/x/text` - Language detection
+- `github.com/maniartech/signals` - Event handling system
 
 ## Contributing
 

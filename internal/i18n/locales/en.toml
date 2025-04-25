@@ -1,13 +1,7 @@
 # English translations
 
-[connection_establishing]
-other = "Establishing connection to cortex server..."
-
 [connection_error]
 other = "Connection error: {{.Error}}"
-
-[connection_closing]
-other = "Closing connection to cortex server..."
 
 [connection_close_error]
 other = "Error closing connection: {{.Error}}"
@@ -24,12 +18,6 @@ other = "Failed to send heartbeat: {{.Error}}"
 [reconnecting]
 other = "Reconnecting due to configuration change..."
 
-[connection_error_terminating]
-other = "Connection terminated with error: {{.Error}}"
-
-[connection_normal_termination]
-other = "Connection terminated normally, exiting"
-
 [json_mode_error]
 other = "JSON mode error: {{.Error}}"
 
@@ -44,10 +32,6 @@ other = "Connecting to cortex server at {{.Host}}:{{.Port}}..."
 
 [ssh_connection_established]
 other = "Connection to cortex server established"
-
-
-[ssh_server_auth]
-other = "Authenticating to server using public key"
 
 # Main application messages
 [i18n_init_error]
@@ -107,8 +91,6 @@ other = "Connection error: {{.Error}}"
 [reconnection_requested]
 other = "Reconnection requested"
 
-
-
 [decode_error]
 other = "Error decoding server response: {{.Error}}"
 
@@ -118,14 +100,11 @@ other = "Received response from server: {{.Response}}"
 [json_shutdown]
 other = "Context cancelled, shutting down JSON mode..."
 
-
-
 [response_no_writer]
 other = "Received response (no output writer): {{.Response}}"
 
 [response_timeout]
 other = "Timeout waiting for response"
-
 
 # SSH connection
 [ssh_connect_failed]
@@ -174,9 +153,8 @@ other = "Failed to serialize data: {{.Error}}"
 [write_payload_error]
 other = "Failed to send data: {{.Error}}"
 
-[ssh_read_error]
+[transport_read_error]
 other = "Failed to read data from connection: {{.Error}}"
-
 
 [stderr_read_error]
 other = "Error reading stderr: {{.Error}}"
@@ -194,11 +172,6 @@ other = "Connection failed"
 [app_termination_signal]
 other = "Termination signal received, shutting down application"
 
-[ssh_stderr_error]
-other = "Error reading from stderr: {{.Error}}"
-
-[stderr_received]
-other = "Received from stderr: {{.Data}}"
 
 [service_stop_error]
 other = "Error stopping {{.Service}} service: {{.Error}}"

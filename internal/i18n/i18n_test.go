@@ -140,12 +140,4 @@ func TestTranslation(t *testing.T) {
 		})
 	}
 
-	t.Run("Tf function", func(t *testing.T) {
-		expected := T("connection_error", map[string]interface{}{"Error": testError})
-		result := Tf("connection_error", map[string]interface{}{"Error": testError})
-
-		if result != expected {
-			t.Errorf("Tf produced different result than T: expected '%s', got '%s'", expected, result)
-		}
-	})
 }

@@ -2,15 +2,13 @@ package protocol
 
 import (
 	"context"
-	"errors"
-	"io"
 	"time"
 
-	"erlang-solutions.com/cortex_agent/internal/ssh"
-	"golang.org/x/sync/errgroup"
+	"erlang-solutions.com/cortex_agent/internal/transport"
+	"erlang-solutions.com/cortex_agent/internal/util"
 )
 
-func readStderr(ctx context.Context, conn ssh.Connection) {
+func readStderr(ctx context.Context, conn transport.Connection) {
 	buffer := make([]byte, 4096)
 
 	for {
@@ -21,7 +19,7 @@ func readStderr(ctx context.Context, conn ssh.Connection) {
 		default:
 			n, err := conn.Stderr().Read(buffer)
 			if err != nil {
-				if isExpectedError(err) {
+				if util.IsExpectedError(err) {
 					return
 				}
 				return
@@ -32,27 +30,7 @@ func readStderr(ctx context.Context, conn ssh.Connection) {
 	}
 }
 
-func isExpectedError(err error) bool {
-	return errors.Is(err, io.EOF) ||
-		errors.Is(err, context.Canceled) ||
-		errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, io.ErrClosedPipe)
-}
-
-func waitWithTimeout(g *errgroup.Group, timeout time.Duration) {
-	waitDone := make(chan struct{})
-	go func() {
-		defer close(waitDone)
-		_ = g.Wait()
-	}()
-
-	select {
-	case <-waitDone:
-	case <-time.After(timeout):
-	}
-}
-
-func RunHeartbeat(ctx context.Context, conn ssh.Connection, interval time.Duration) error {
+func RunHeartbeat(ctx context.Context, conn transport.Connection, interval time.Duration) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"erlang-solutions.com/cortex_agent/internal/app"
 	"erlang-solutions.com/cortex_agent/internal/daemon"
 	"erlang-solutions.com/cortex_agent/internal/i18n"
+	"erlang-solutions.com/cortex_agent/internal/util"
 )
 
 var (
@@ -43,7 +43,7 @@ func main() {
 
 	if *writePid {
 		if err := daemon.WritePidFile(); err != nil {
-			log.Printf(i18n.Tf("pid_file_error", nil), i18n.T("pid_file_error", map[string]interface{}{"Error": err}))
+			log.Printf("%s", i18n.T("pid_file_error", map[string]interface{}{"Error": err}))
 		}
 	}
 
@@ -51,8 +51,8 @@ func main() {
 
 	application := app.NewApp(*configFile, *jsonMode)
 	if err := application.Run(ctx); err != nil {
-		if errors.Is(err, context.Canceled) {
-			log.Println(i18n.T("app_terminated", map[string]interface{}{"Reason": "context cancellation"}))
+		if util.IsExpectedError(err) {
+			log.Println(i18n.T("app_terminated", map[string]interface{}{"Reason": "expected termination"}))
 		} else {
 			log.Fatalf("%s", i18n.T("app_error", map[string]interface{}{"Error": err}))
 		}

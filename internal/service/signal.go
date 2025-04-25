@@ -4,41 +4,83 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
-)
 
-const (
-	SIGHUPReceived EventType = "sighup_received"
+	"erlang-solutions.com/cortex_agent/internal/event"
+	"erlang-solutions.com/cortex_agent/internal/util"
 )
 
 const DefaultGracefulTimeout = 5 * time.Second
 
 type SignalService struct {
-	BaseService
+	name            string
+	bus             *event.Bus
+	ctx             context.Context
+	cancel          context.CancelFunc
+	wg              sync.WaitGroup
+	mu              sync.Mutex
 	gracefulTimeout time.Duration
+	unsubscribes    []func()
 }
 
-func NewSignalService(gracefulTimeout time.Duration, bus *EventBus) *SignalService {
+func NewSignalService(gracefulTimeout time.Duration, bus *event.Bus) *SignalService {
 	return &SignalService{
-		BaseService:     NewBaseService("signal", bus),
+		name:            "signal",
+		bus:             bus,
 		gracefulTimeout: gracefulTimeout,
+		unsubscribes:    make([]func(), 0),
 	}
 }
 
-func NewDefaultSignalService(bus *EventBus) *SignalService {
+func NewDefaultSignalService(bus *event.Bus) *SignalService {
 	return NewSignalService(DefaultGracefulTimeout, bus)
 }
 
 func (s *SignalService) Start(ctx context.Context) error {
-	if err := s.BaseService.Start(ctx); err != nil {
-		return err
+	s.ctx, s.cancel = context.WithCancel(ctx)
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.handleSignals()
+	}()
+	return nil
+}
+
+func (s *SignalService) Stop(ctx context.Context) error {
+	s.mu.Lock()
+	unsubscribes := s.unsubscribes
+	s.unsubscribes = nil
+	s.mu.Unlock()
+
+	for _, unsub := range unsubscribes {
+		if unsub != nil {
+			unsub()
+		}
 	}
 
-	s.Go(func() {
-		s.handleSignals()
-	})
-	return nil
+	if s.cancel != nil {
+		s.cancel()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		util.WaitWithTimeout(&s.wg, 500*time.Millisecond)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		err := ctx.Err()
+		if util.IsExpectedError(err) {
+			return nil
+		}
+		return err
+	}
 }
 
 func (s *SignalService) handleSignals() {
@@ -53,21 +95,36 @@ func (s *SignalService) handleSignals() {
 
 	for {
 		select {
-		case <-s.Context().Done():
+		case <-s.ctx.Done():
 			return
 
 		case sig := <-termCh:
-			drainSignals(termCh)
-			s.bus.Publish(Event{Type: TerminationSignal, Data: sig})
+		drainLoop:
+			for {
+				select {
+				case <-termCh:
+					// Continue draining
+				default:
+					break drainLoop
+				}
+			}
+			s.bus.Publish(event.Event{Type: event.TerminationSignal, Data: sig})
 
-			// Set up forced exit after timeout
 			time.AfterFunc(s.gracefulTimeout, func() {
 				os.Exit(1)
 			})
 
 		case <-sighupCh:
-			drainSignals(sighupCh)
-			s.bus.Publish(Event{Type: SIGHUPReceived})
+		drainSighup:
+			for {
+				select {
+				case <-sighupCh:
+					// Continue draining
+				default:
+					break drainSighup
+				}
+			}
+			s.bus.Publish(event.Event{Type: event.SIGHUPReceived})
 		}
 	}
 }
