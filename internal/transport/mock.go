@@ -1,4 +1,4 @@
-package ssh
+package transport
 
 import (
 	"bytes"
@@ -13,11 +13,13 @@ type MockConnection struct {
 	stdout         *bytes.Buffer
 	stderr         *bytes.Buffer
 	stdinCloser    *MockWriteCloser
-	client         interface{}
 	sendPayloadErr error
 	closeErr       error
 	mu             sync.Mutex
+	closed         bool
 }
+
+var _ Connection = (*MockConnection)(nil)
 
 type MockWriteCloser struct {
 	*bytes.Buffer
@@ -51,11 +53,14 @@ func (m *MockConnection) Stderr() io.Reader {
 	return m.stderr
 }
 
-func (m *MockConnection) Client() interface{} {
-	return m.client
-}
-
 func (m *MockConnection) SendPayload(payload interface{}) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.closed {
+		return fmt.Errorf("connection closed")
+	}
+
 	if m.sendPayloadErr != nil {
 		return m.sendPayloadErr
 	}
@@ -74,6 +79,10 @@ func (m *MockConnection) SendPayload(payload interface{}) error {
 }
 
 func (m *MockConnection) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.closed = true
 	return m.closeErr
 }
 
@@ -96,9 +105,13 @@ func (m *MockConnection) GetWrittenData() []byte {
 }
 
 func (m *MockConnection) SetSendPayloadError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.sendPayloadErr = err
 }
 
 func (m *MockConnection) SetCloseError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.closeErr = err
 }

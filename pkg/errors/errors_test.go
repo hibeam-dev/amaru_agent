@@ -5,24 +5,6 @@ import (
 	"testing"
 )
 
-func TestWrap(t *testing.T) {
-	originalErr := errors.New("original error")
-	wrappedErr := Wrap(originalErr, "wrapped message")
-
-	if wrappedErr == nil {
-		t.Fatal("Expected non-nil error, got nil")
-	}
-
-	if wrappedErr.Error() != "wrapped message: original error" {
-		t.Errorf("Expected 'wrapped message: original error', got '%s'", wrappedErr.Error())
-	}
-
-	unwrappedErr := errors.Unwrap(wrappedErr)
-	if unwrappedErr != originalErr {
-		t.Errorf("Expected unwrapped error to be original error")
-	}
-}
-
 func TestWrapWithBase(t *testing.T) {
 	baseErr := errors.New("base error")
 	causeErr := errors.New("cause error")

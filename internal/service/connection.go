@@ -2,44 +2,49 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"sync"
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
+	"erlang-solutions.com/cortex_agent/internal/event"
 	"erlang-solutions.com/cortex_agent/internal/i18n"
 	"erlang-solutions.com/cortex_agent/internal/protocol"
-	"erlang-solutions.com/cortex_agent/internal/ssh"
+	"erlang-solutions.com/cortex_agent/internal/transport"
+	"erlang-solutions.com/cortex_agent/internal/util"
 )
 
 type ConnectionService struct {
-	BaseService
 	jsonMode bool
+	name     string
+	bus      *event.Bus
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
 
-	mu     sync.Mutex
-	conn   ssh.Connection
-	config config.Config
+	mu           sync.Mutex
+	conn         transport.Connection
+	config       config.Config
+	unsubscribes []func()
 }
 
-func NewConnectionService(jsonMode bool, bus *EventBus) *ConnectionService {
+func NewConnectionService(jsonMode bool, bus *event.Bus) *ConnectionService {
 	return &ConnectionService{
-		BaseService: NewBaseService("connection", bus),
-		jsonMode:    jsonMode,
+		name:         "connection",
+		bus:          bus,
+		jsonMode:     jsonMode,
+		unsubscribes: make([]func(), 0),
 	}
 }
 
 func (s *ConnectionService) Start(ctx context.Context) error {
-	if err := s.BaseService.Start(ctx); err != nil {
-		return err
-	}
+	s.ctx, s.cancel = context.WithCancel(ctx)
 
-	configCh := s.bus.Subscribe(ConfigUpdated, 1)
-	s.Go(func() {
-		s.handleEvents(configCh)
-	})
+	unsub := s.bus.Subscribe(event.ConfigUpdated, s.handleConfigEvent)
+	s.mu.Lock()
+	s.unsubscribes = append(s.unsubscribes, unsub)
+	s.mu.Unlock()
 
 	return nil
 }
@@ -61,9 +66,9 @@ func (s *ConnectionService) GetConfig() config.Config {
 }
 
 func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) error {
-	conn, err := ssh.Connect(ctx, cfg)
+	conn, err := transport.NewConnection(ctx, cfg)
 	if err != nil {
-		s.bus.Publish(Event{Type: ConnectionFailed, Data: err})
+		s.bus.Publish(event.Event{Type: event.ConnectionFailed, Data: err})
 		return fmt.Errorf("%s", i18n.T("connection_error", map[string]interface{}{"Error": err}))
 	}
 
@@ -77,10 +82,12 @@ func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) erro
 	s.conn = conn
 	s.mu.Unlock()
 
-	s.bus.Publish(Event{Type: ConnectionEstablished})
-	s.Go(func() {
+	s.bus.Publish(event.Event{Type: event.ConnectionEstablished})
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
 		s.runConnectionLoop(ctx)
-	})
+	}()
 
 	return nil
 }
@@ -102,23 +109,23 @@ func (s *ConnectionService) closeConnection() error {
 	}
 
 	_ = conn.Close()
-	s.bus.Publish(Event{Type: ConnectionClosed})
+	s.bus.Publish(event.Event{Type: event.ConnectionClosed})
 
 	return nil
 }
 
-func (s *ConnectionService) sendConfig(conn ssh.Connection, cfg config.Config) error {
+func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Config) error {
 	payload := struct {
-		Type        string                `json:"type"`
-		Application ssh.ApplicationConfig `json:"application"`
-		Agent       ssh.AgentConfig       `json:"agent"`
+		Type        string                      `json:"type"`
+		Application transport.ApplicationConfig `json:"application"`
+		Agent       transport.AgentConfig       `json:"agent"`
 	}{
 		Type: "config_update",
-		Application: ssh.ApplicationConfig{
+		Application: transport.ApplicationConfig{
 			Hostname: cfg.Application.Hostname,
 			Port:     cfg.Application.Port,
 		},
-		Agent: ssh.AgentConfig{
+		Agent: transport.AgentConfig{
 			Tags: cfg.Agent.Tags,
 		},
 	}
@@ -129,34 +136,58 @@ func (s *ConnectionService) sendConfig(conn ssh.Connection, cfg config.Config) e
 	return nil
 }
 
-func (s *ConnectionService) handleEvents(configCh <-chan Event) {
-	for {
-		select {
-		case <-s.Context().Done():
-			return
+func (s *ConnectionService) Stop(ctx context.Context) error {
+	s.mu.Lock()
+	unsubscribes := s.unsubscribes
+	s.unsubscribes = nil
+	s.mu.Unlock()
 
-		case event, ok := <-configCh:
-			if !ok {
-				return
+	for _, unsub := range unsubscribes {
+		if unsub != nil {
+			unsub()
+		}
+	}
+
+	if s.cancel != nil {
+		s.cancel()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		util.WaitWithTimeout(&s.wg, 500*time.Millisecond)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		err := ctx.Err()
+		if util.IsExpectedError(err) {
+			return nil
+		}
+		return err
+	}
+}
+
+func (s *ConnectionService) handleConfigEvent(evt event.Event) {
+	if evt.Type != event.ConfigUpdated {
+		return
+	}
+
+	if cfg, ok := evt.Data.(config.Config); ok {
+		s.SetConfig(cfg)
+
+		s.mu.Lock()
+		conn := s.conn
+		s.mu.Unlock()
+
+		if conn != nil {
+			if err := s.sendConfig(conn, cfg); err != nil {
+				s.bus.Publish(event.Event{Type: event.ReconnectRequested})
 			}
-
-			if event.Type == ConfigUpdated {
-				if cfg, ok := event.Data.(config.Config); ok {
-					s.SetConfig(cfg)
-
-					s.mu.Lock()
-					conn := s.conn
-					s.mu.Unlock()
-
-					if conn != nil {
-						if err := s.sendConfig(conn, cfg); err != nil {
-							s.bus.Publish(Event{Type: ReconnectRequested})
-						}
-					} else {
-						s.bus.Publish(Event{Type: ReconnectRequested})
-					}
-				}
-			}
+		} else {
+			s.bus.Publish(event.Event{Type: event.ReconnectRequested})
 		}
 	}
 }
@@ -171,81 +202,63 @@ func (s *ConnectionService) runConnectionLoop(ctx context.Context) {
 		return
 	}
 
-	var err error
+	handler := s.runStandardMode
 	if jsonMode {
-		err = s.runJSONMode(ctx, conn)
-	} else {
-		err = s.runStandardMode(ctx, conn)
+		handler = s.runJSONMode
 	}
 
-	if err != nil && !isKnownGoodError(err) {
-		s.bus.Publish(Event{Type: ConnectionFailed, Data: err})
+	if err := handler(ctx, conn); err != nil && !util.IsExpectedError(err) {
+		s.bus.Publish(event.Event{Type: event.ConnectionFailed, Data: err})
 	}
 
 	_ = s.closeConnection()
 }
 
-func (s *ConnectionService) runJSONMode(ctx context.Context, conn ssh.Connection) error {
+func (s *ConnectionService) runJSONMode(ctx context.Context, conn transport.Connection) error {
 	errCh := make(chan error, 1)
-	heartbeatCtx, cancelHeartbeat := context.WithCancel(ctx)
-	defer cancelHeartbeat()
 
 	go func() {
 		errCh <- protocol.HandleJSONMode(ctx, conn, os.Stdin, os.Stdout)
 	}()
 
-	go func() {
-		err := protocol.RunHeartbeat(heartbeatCtx, conn, 30*time.Second)
-		if err != nil && !isKnownGoodError(err) {
-			select {
-			case errCh <- fmt.Errorf("%s", i18n.T("heartbeat_error", map[string]interface{}{"Error": err})):
-			default:
-			}
-		}
-	}()
+	heartbeatTicker := time.NewTicker(30 * time.Second)
+	defer heartbeatTicker.Stop()
 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-errCh:
-		if err != nil && !isKnownGoodError(err) {
-			return fmt.Errorf("%s", i18n.T("json_mode_error", map[string]interface{}{"Error": err}))
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errCh:
+			if err != nil && !util.IsExpectedError(err) {
+				return fmt.Errorf("%s", i18n.T("json_mode_error", map[string]interface{}{"Error": err}))
+			}
+			return err
+		case <-heartbeatTicker.C:
+			_ = conn.SendPayload(map[string]string{"type": "heartbeat"})
 		}
-		return err
 	}
 }
 
-func (s *ConnectionService) runStandardMode(ctx context.Context, conn ssh.Connection) error {
+func (s *ConnectionService) runStandardMode(ctx context.Context, conn transport.Connection) error {
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
 
-	reconnectCh := s.bus.Subscribe(ReconnectRequested, 1)
 	reconnectPassthrough := make(chan struct{}, 1)
-
-	go func() {
+	unsub := s.bus.Subscribe(event.ReconnectRequested, func(evt event.Event) {
 		select {
-		case <-runCtx.Done():
-			return
-		case <-reconnectCh:
-			select {
-			case reconnectPassthrough <- struct{}{}:
-			default:
-			}
-			cancelRun()
+		case reconnectPassthrough <- struct{}{}:
+		default:
 		}
-	}()
+		cancelRun()
+	})
+
+	defer unsub()
 
 	err := protocol.RunMainLoop(runCtx, conn, reconnectPassthrough)
 
-	if err != nil && !isKnownGoodError(err) {
+	if err != nil && !util.IsExpectedError(err) {
 		return fmt.Errorf("%s", i18n.T("main_loop_error", map[string]interface{}{"Error": err}))
 	}
 
 	return nil
-}
-
-func isKnownGoodError(err error) bool {
-	return err == nil ||
-		errors.Is(err, context.Canceled) ||
-		errors.Is(err, io.EOF)
 }

@@ -1,19 +1,98 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
-	"erlang-solutions.com/cortex_agent/internal/ssh"
+	"erlang-solutions.com/cortex_agent/internal/event"
 )
+
+type mockConnection struct {
+	stdin          *bytes.Buffer
+	stdout         *bytes.Buffer
+	stderr         *bytes.Buffer
+	stdinCloser    *mockWriteCloser
+	sendPayloadErr error
+	closeErr       error
+	mu             sync.Mutex
+}
+
+type mockWriteCloser struct {
+	*bytes.Buffer
+	closeErr error
+}
+
+func (m *mockWriteCloser) Close() error {
+	return m.closeErr
+}
+
+func newMockConnection() *mockConnection {
+	stdin := bytes.NewBuffer(nil)
+	stdinCloser := &mockWriteCloser{Buffer: stdin}
+	return &mockConnection{
+		stdin:       stdin,
+		stdinCloser: stdinCloser,
+		stdout:      bytes.NewBuffer(nil),
+		stderr:      bytes.NewBuffer(nil),
+	}
+}
+
+func (m *mockConnection) Stdin() io.WriteCloser {
+	return m.stdinCloser
+}
+
+func (m *mockConnection) Stdout() io.Reader {
+	return m.stdout
+}
+
+func (m *mockConnection) Stderr() io.Reader {
+	return m.stderr
+}
+
+func (m *mockConnection) SendPayload(payload interface{}) error {
+	if m.sendPayloadErr != nil {
+		return m.sendPayloadErr
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to serialize payload to JSON: %w", err)
+	}
+
+	_, err = m.stdin.Write(jsonData)
+	if err != nil {
+		return fmt.Errorf("failed to write to stdin: %w", err)
+	}
+
+	return nil
+}
+
+func (m *mockConnection) Close() error {
+	return m.closeErr
+}
+
+func (m *mockConnection) getWrittenData() []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.stdin.Bytes()
+}
+
+func (m *mockConnection) setSendPayloadError(err error) {
+	m.sendPayloadErr = err
+}
 
 func TestConnectionService(t *testing.T) {
 	t.Run("JSONMode", func(t *testing.T) {
-		bus := NewEventBus()
+		bus := event.NewBus()
 		svc1 := NewConnectionService(true, bus)
 		svc2 := NewConnectionService(false, bus)
 
@@ -27,7 +106,7 @@ func TestConnectionService(t *testing.T) {
 	})
 
 	t.Run("ConfigManagement", func(t *testing.T) {
-		bus := NewEventBus()
+		bus := event.NewBus()
 		svc := NewConnectionService(false, bus)
 
 		testConfig := config.Config{}
@@ -56,7 +135,7 @@ func TestConnectionService(t *testing.T) {
 	})
 
 	t.Run("HasConnection", func(t *testing.T) {
-		bus := NewEventBus()
+		bus := event.NewBus()
 		svc := NewConnectionService(false, bus)
 
 		if svc.HasConnection() {
@@ -65,8 +144,8 @@ func TestConnectionService(t *testing.T) {
 	})
 
 	t.Run("SendConfig", func(t *testing.T) {
-		mockConn := ssh.NewMockConnection()
-		bus := NewEventBus()
+		mockConn := newMockConnection()
+		bus := event.NewBus()
 		svc := NewConnectionService(false, bus)
 
 		cfg := config.Config{}
@@ -78,7 +157,7 @@ func TestConnectionService(t *testing.T) {
 			t.Errorf("Expected no error on send, got: %v", err)
 		}
 
-		writtenData := mockConn.GetWrittenData()
+		writtenData := mockConn.getWrittenData()
 		if len(writtenData) == 0 {
 			t.Error("No data was written to connection")
 		}
@@ -88,7 +167,7 @@ func TestConnectionService(t *testing.T) {
 		}
 
 		testErr := errors.New("test error")
-		mockConn.SetSendPayloadError(testErr)
+		mockConn.setSendPayloadError(testErr)
 
 		if err := svc.sendConfig(mockConn, cfg); err == nil {
 			t.Error("Expected error when connection fails")
@@ -96,7 +175,7 @@ func TestConnectionService(t *testing.T) {
 	})
 
 	t.Run("ServiceLifecycle", func(t *testing.T) {
-		bus := NewEventBus()
+		bus := event.NewBus()
 		svc := NewConnectionService(false, bus)
 
 		ctx := context.Background()
@@ -111,7 +190,7 @@ func TestConnectionService(t *testing.T) {
 	})
 
 	t.Run("EventHandling", func(t *testing.T) {
-		bus := NewEventBus()
+		bus := event.NewBus()
 		svc := NewConnectionService(false, bus)
 
 		// Need to start the service to initialize the context
@@ -121,19 +200,23 @@ func TestConnectionService(t *testing.T) {
 		}
 		defer func() { _ = svc.Stop(ctx) }()
 
-		reconnectCh := bus.Subscribe(ReconnectRequested, 1)
+		reconnectReceived := make(chan struct{})
+
+		bus.Subscribe(event.ReconnectRequested, func(evt event.Event) {
+			close(reconnectReceived)
+		})
 
 		cfg := config.Config{}
 		cfg.Application.Hostname = "updated-host"
-		bus.Publish(Event{Type: ConfigUpdated, Data: cfg})
+		bus.Publish(event.Event{Type: event.ConfigUpdated, Data: cfg})
 
-		time.Sleep(10 * time.Millisecond) // Wait for processing
+		time.Sleep(10 * time.Millisecond)
 		if svc.GetConfig().Application.Hostname != "updated-host" {
 			t.Error("Config should be updated after event")
 		}
 
 		select {
-		case <-reconnectCh:
+		case <-reconnectReceived:
 			// Expected behavior
 		case <-time.After(100 * time.Millisecond):
 			t.Error("Should have received reconnect event")
