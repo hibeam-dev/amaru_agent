@@ -32,7 +32,7 @@ cover-html:
 mocks:
 	@echo "Generating mocks..."
 	@go install go.uber.org/mock/mockgen@latest
-	@mockgen -destination=internal/transport/mocks/mock_connection.go -package=mocks erlang-solutions.com/cortex_agent/internal/transport Connection
+	@$(shell go env GOPATH)/bin/mockgen -destination=internal/transport/mocks/mock_connection.go -package=mocks erlang-solutions.com/cortex_agent/internal/transport Connection
 
 lint:
 	@echo "Running linter..."
