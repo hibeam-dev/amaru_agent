@@ -43,7 +43,7 @@ func main() {
 
 	if *writePid {
 		if err := daemon.WritePidFile(); err != nil {
-			log.Printf("%s", i18n.T("pid_file_error", map[string]interface{}{"Error": err}))
+			log.Printf("%s", i18n.T("pid_file_error", map[string]any{"Error": err}))
 		}
 	}
 
@@ -52,9 +52,9 @@ func main() {
 	application := app.NewApp(*configFile, *jsonMode)
 	if err := application.Run(ctx); err != nil {
 		if util.IsExpectedError(err) {
-			log.Println(i18n.T("app_terminated", map[string]interface{}{"Reason": "expected termination"}))
+			log.Println(i18n.T("app_terminated", map[string]any{"Reason": "expected termination"}))
 		} else {
-			log.Fatalf("%s", i18n.T("app_error", map[string]interface{}{"Error": err}))
+			log.Fatalf("%s", i18n.T("app_error", map[string]any{"Error": err}))
 		}
 	}
 }

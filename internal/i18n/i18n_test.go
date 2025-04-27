@@ -94,14 +94,14 @@ func TestTranslation(t *testing.T) {
 	testCases := []struct {
 		name       string
 		messageID  string
-		data       map[string]interface{}
+		data       map[string]any
 		expected   string
 		shouldFail bool
 	}{
 		{
 			name:       "Basic translation",
 			messageID:  "connection_error",
-			data:       map[string]interface{}{"Error": testError},
+			data:       map[string]any{"Error": testError},
 			expected:   "SSH connection error: test error",
 			shouldFail: false,
 		},

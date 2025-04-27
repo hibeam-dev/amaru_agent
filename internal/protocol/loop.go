@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -39,7 +40,7 @@ func RunMainLoop(ctx context.Context, conn transport.Connection, reconnectCh <-c
 				return nil
 			case <-heartbeatTicker.C:
 				if err := conn.SendPayload(map[string]string{"type": "heartbeat"}); err != nil {
-					return fmt.Errorf("%s", i18n.T("heartbeat_error", map[string]interface{}{"Error": err}))
+					return fmt.Errorf("%s: %w", i18n.T("heartbeat_error", map[string]any{"Error": err}), err)
 				}
 			}
 		}
@@ -60,7 +61,9 @@ func RunMainLoop(ctx context.Context, conn transport.Connection, reconnectCh <-c
 		cancelRead()
 	}
 
-	util.WaitGroupWithTimeout(g, 500*time.Millisecond)
+	if err := g.Wait(); err != nil && !util.IsExpectedError(err) {
+		log.Printf("Error in main loop: %v", err)
+	}
 
 	return result
 }
@@ -69,25 +72,35 @@ func readData(ctx context.Context, conn transport.Connection, errorCh chan<- err
 	buffer := make([]byte, 8192)
 
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return ctx.Err()
+		}
 
-		default:
-			n, err := conn.Stdout().Read(buffer)
-			if err != nil {
-				if util.IsExpectedError(err) {
-					return nil
-				}
+		if setter, ok := conn.Stdout().(interface{ SetReadDeadline(time.Time) error }); ok {
+			_ = setter.SetReadDeadline(time.Now().Add(5 * time.Second))
+		}
 
-				select {
-				case errorCh <- fmt.Errorf("%s", i18n.T("transport_read_error", map[string]interface{}{"Error": err})):
-				case <-ctx.Done():
-				}
-				return err
+		n, err := conn.Stdout().Read(buffer)
+
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		if err != nil {
+			if util.IsExpectedError(err) {
+				return nil
 			}
 
-			_ = n
+			wrappedErr := fmt.Errorf("%s: %w", i18n.T("transport_read_error", map[string]any{"Error": err}), err)
+			select {
+			case errorCh <- wrappedErr:
+			case <-ctx.Done():
+			}
+			return wrappedErr
+		}
+
+		if n > 0 {
+			log.Printf("Received %d bytes from transport", n)
 		}
 	}
 }

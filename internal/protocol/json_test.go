@@ -3,18 +3,14 @@ package protocol
 import (
 	"bytes"
 	"context"
-	"io"
 	"testing"
 	"time"
+
+	"erlang-solutions.com/cortex_agent/internal/transport/mocks"
+	"go.uber.org/mock/gomock"
 )
 
-type mockConnection struct {
-	stdin       *bytes.Buffer
-	stdout      *bytes.Buffer
-	stderr      *bytes.Buffer
-	stdinCloser *mockWriteCloser
-}
-
+// Custom WriteCloser for testing
 type mockWriteCloser struct {
 	*bytes.Buffer
 }
@@ -23,41 +19,27 @@ func (m *mockWriteCloser) Close() error {
 	return nil
 }
 
-func newMockConnection() *mockConnection {
+// Helper function to create a MockConnection with stdin/stdout/stderr buffers
+func newMockConnection(t *testing.T) *mocks.MockConnection {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(func() { ctrl.Finish() })
+
 	stdin := bytes.NewBuffer(nil)
 	stdout := bytes.NewBuffer(nil)
 	stderr := bytes.NewBuffer(nil)
+
 	stdinCloser := &mockWriteCloser{stdin}
-	return &mockConnection{
-		stdin:       stdin,
-		stdout:      stdout,
-		stderr:      stderr,
-		stdinCloser: stdinCloser,
-	}
-}
 
-func (m *mockConnection) Stdin() io.WriteCloser {
-	return m.stdinCloser
-}
+	mockConn := mocks.NewMockConnection(ctrl)
+	mockConn.EXPECT().Stdin().Return(stdinCloser).AnyTimes()
+	mockConn.EXPECT().Stdout().Return(stdout).AnyTimes()
+	mockConn.EXPECT().Stderr().Return(stderr).AnyTimes()
 
-func (m *mockConnection) Stdout() io.Reader {
-	return m.stdout
-}
-
-func (m *mockConnection) Stderr() io.Reader {
-	return m.stderr
-}
-
-func (m *mockConnection) SendPayload(payload interface{}) error {
-	return nil
-}
-
-func (m *mockConnection) Close() error {
-	return nil
+	return mockConn
 }
 
 func TestHandleJSONModeContextCancellation(t *testing.T) {
-	mockConn := newMockConnection()
+	mockConn := newMockConnection(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -77,7 +59,7 @@ func TestHandleJSONModeContextCancellation(t *testing.T) {
 }
 
 func TestRunMainLoopCompilation(t *testing.T) {
-	mockConn := newMockConnection()
+	mockConn := newMockConnection(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

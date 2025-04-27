@@ -1,40 +1,49 @@
 package daemon
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
-func TestPidFileCreation(t *testing.T) {
+func TestWritePidFile(t *testing.T) {
+	originalHome := os.Getenv("HOME")
+
 	tmpDir, err := os.MkdirTemp("", "daemon-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
+
 	defer func() {
+		if err := os.Setenv("HOME", originalHome); err != nil {
+			t.Logf("Warning: Failed to restore HOME env var: %v", err)
+		}
 		if err := os.RemoveAll(tmpDir); err != nil {
 			t.Logf("Warning: Failed to remove temp directory: %v", err)
 		}
 	}()
 
-	pidDir := filepath.Join(tmpDir, ".cortex_agent")
-	if err := os.MkdirAll(pidDir, 0755); err != nil {
-		t.Fatalf("Failed to create PID directory: %v", err)
-	}
-	pidPath := filepath.Join(pidDir, "cortex_agent.pid")
-	pid := os.Getpid()
-	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
-		t.Fatalf("Failed to write test PID file: %v", err)
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("Failed to set HOME environment variable: %v", err)
 	}
 
+	if err := WritePidFile(); err != nil {
+		t.Fatalf("WritePidFile() failed: %v", err)
+	}
+
+	pidPath := filepath.Join(tmpDir, ".cortex_agent", "cortex_agent.pid")
 	content, err := os.ReadFile(pidPath)
 	if err != nil {
 		t.Fatalf("Failed to read PID file: %v", err)
 	}
 
-	expectedPid := fmt.Sprintf("%d", pid)
-	if string(content) != expectedPid {
-		t.Errorf("Expected PID file to contain %s, got %s", expectedPid, content)
+	pid, err := strconv.Atoi(string(content))
+	if err != nil {
+		t.Fatalf("PID file contains invalid data: %s", content)
+	}
+
+	if pid != os.Getpid() {
+		t.Errorf("Expected PID %d, got %d", os.Getpid(), pid)
 	}
 }

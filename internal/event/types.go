@@ -1,5 +1,9 @@
 package event
 
+import (
+	"context"
+)
+
 const (
 	ConfigUpdated         = "config_updated"
 	ConnectionEstablished = "connection_established"
@@ -12,5 +16,6 @@ const (
 
 type Event struct {
 	Type string
-	Data interface{}
+	Data any
+	Ctx  context.Context
 }

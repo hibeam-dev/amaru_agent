@@ -27,7 +27,7 @@ func WritePidFile() error {
 		return fmt.Errorf("%s: %w", i18n.T("pid_file_write_error", nil), err)
 	}
 
-	log.Printf("%s", i18n.T("pid_file_written", map[string]interface{}{
+	log.Printf("%s", i18n.T("pid_file_written", map[string]any{
 		"Path": pidPath,
 		"PID":  pid,
 	}))

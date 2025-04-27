@@ -8,6 +8,6 @@ type Connection interface {
 	Stdin() io.WriteCloser
 	Stdout() io.Reader
 	Stderr() io.Reader
-	SendPayload(payload interface{}) error
+	SendPayload(payload any) error
 	Close() error
 }

@@ -12,12 +12,12 @@ type Handler func(Event)
 
 type Bus struct {
 	mu      sync.RWMutex
-	signals map[string]signals.Signal[interface{}]
+	signals map[string]signals.Signal[any]
 }
 
 func NewBus() *Bus {
 	return &Bus{
-		signals: make(map[string]signals.Signal[interface{}]),
+		signals: make(map[string]signals.Signal[any]),
 	}
 }
 
@@ -26,15 +26,16 @@ func (b *Bus) Subscribe(eventType string, handler Handler) func() {
 	defer b.mu.Unlock()
 
 	if _, exists := b.signals[eventType]; !exists {
-		b.signals[eventType] = signals.New[interface{}]()
+		b.signals[eventType] = signals.New[any]()
 	}
 
 	key := fmt.Sprintf("%p", handler) // Use the handler's pointer address as a unique key
 
-	b.signals[eventType].AddListener(func(ctx context.Context, data interface{}) {
+	b.signals[eventType].AddListener(func(ctx context.Context, data any) {
 		handler(Event{
 			Type: eventType,
 			Data: data,
+			Ctx:  ctx,
 		})
 	}, key)
 
@@ -62,10 +63,17 @@ func (b *Bus) SubscribeMultiple(eventTypes []string, handler Handler) []func() {
 func (b *Bus) Publish(event Event) {
 	b.mu.RLock()
 	signal, exists := b.signals[event.Type]
-	b.mu.RUnlock()
-
 	if exists {
-		signal.Emit(context.Background(), event.Data)
+		// Create a local reference while holding the lock
+		localSignal := signal
+		b.mu.RUnlock()
+		ctx := event.Ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		localSignal.Emit(ctx, event.Data)
+	} else {
+		b.mu.RUnlock()
 	}
 }
 
@@ -82,5 +90,5 @@ func (b *Bus) Close() {
 	for _, signal := range b.signals {
 		signal.Reset()
 	}
-	b.signals = make(map[string]signals.Signal[interface{}])
+	b.signals = make(map[string]signals.Signal[any])
 }

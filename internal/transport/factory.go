@@ -8,7 +8,7 @@ import (
 )
 
 type ConnCreator interface {
-	CreateConnection(ctx context.Context, cfg config.Config, opts map[string]interface{}) (Connection, error)
+	CreateConnection(ctx context.Context, cfg config.Config, opts map[string]any) (Connection, error)
 }
 
 var transportRegistry = make(map[string]ConnCreator)
@@ -19,9 +19,9 @@ func RegisterTransport(protocol string, creator ConnCreator) {
 
 const DefaultProtocol = "ssh"
 
-func NewConnection(ctx context.Context, cfg config.Config, opts ...map[string]interface{}) (Connection, error) {
+func NewConnection(ctx context.Context, cfg config.Config, opts ...map[string]any) (Connection, error) {
 	protocol := DefaultProtocol
-	connectionOpts := make(map[string]interface{})
+	connectionOpts := make(map[string]any)
 
 	if len(opts) > 0 && opts[0] != nil {
 		connectionOpts = opts[0]
@@ -29,7 +29,8 @@ func NewConnection(ctx context.Context, cfg config.Config, opts ...map[string]in
 
 	creator, ok := transportRegistry[protocol]
 	if !ok {
-		return nil, fmt.Errorf("transport protocol '%s' not available - ensure required package is included in the build", protocol)
+		return nil, fmt.Errorf("transport protocol '%s' not available - ensure required package is included in the build",
+			protocol)
 	}
 
 	return creator.CreateConnection(ctx, cfg, connectionOpts)

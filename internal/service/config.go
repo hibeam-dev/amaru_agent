@@ -2,9 +2,7 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"sync"
-	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
 	"erlang-solutions.com/cortex_agent/internal/event"
@@ -13,51 +11,46 @@ import (
 )
 
 type ConfigService struct {
-	name     string
-	bus      *event.Bus
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
+	Service
 	filePath string
 
-	mu           sync.RWMutex
-	config       config.Config
-	loaded       bool
-	unsubscribes []func()
+	configMu sync.RWMutex
+	config   config.Config
+	loaded   bool
 }
 
 func NewConfigService(filePath string, bus *event.Bus) *ConfigService {
-	return &ConfigService{
-		name:         "config",
-		bus:          bus,
-		filePath:     filePath,
-		unsubscribes: make([]func(), 0),
+	s := &ConfigService{
+		Service:  NewService("config", bus),
+		filePath: filePath,
 	}
+	return s
 }
 
 func (s *ConfigService) Start(ctx context.Context) error {
-	s.ctx, s.cancel = context.WithCancel(ctx)
+	if err := s.Service.Start(ctx); err != nil {
+		return err
+	}
 
-	unsub := s.bus.Subscribe(event.SIGHUPReceived, func(evt event.Event) {
-		s.reloadAndPublishConfig()
-	})
-
-	s.mu.Lock()
-	s.unsubscribes = append(s.unsubscribes, unsub)
-	s.mu.Unlock()
+	unsub := s.bus.Subscribe(event.SIGHUPReceived, s.handleSIGHUP)
+	s.AddSubscription(unsub)
 
 	return nil
 }
 
+func (s *ConfigService) Stop(ctx context.Context) error {
+	return s.Service.Stop(ctx)
+}
+
 func (s *ConfigService) GetConfig() config.Config {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.configMu.RLock()
+	defer s.configMu.RUnlock()
 	return s.config
 }
 
 func (s *ConfigService) SetConfig(cfg config.Config) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
 	s.config = cfg
 	s.loaded = true
 }
@@ -65,46 +58,18 @@ func (s *ConfigService) SetConfig(cfg config.Config) {
 func (s *ConfigService) LoadConfig() (config.Config, error) {
 	cfg, err := config.Load(s.filePath)
 	if err != nil {
-		return config.Config{}, fmt.Errorf("%s: %w",
-			i18n.T("config_load_error", map[string]interface{}{"Error": err}), err)
+		return config.Config{}, util.WrapError(i18n.T("config_load_error", map[string]any{"Error": err}), err)
 	}
 
 	s.SetConfig(cfg)
 	return cfg, nil
 }
 
-func (s *ConfigService) Stop(ctx context.Context) error {
-	s.mu.Lock()
-	unsubscribes := s.unsubscribes
-	s.unsubscribes = nil
-	s.mu.Unlock()
-
-	for _, unsub := range unsubscribes {
-		if unsub != nil {
-			unsub()
-		}
+func (s *ConfigService) handleSIGHUP(evt event.Event) {
+	if evt.Type != event.SIGHUPReceived {
+		return
 	}
-
-	if s.cancel != nil {
-		s.cancel()
-	}
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		util.WaitWithTimeout(&s.wg, 500*time.Millisecond)
-	}()
-
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		err := ctx.Err()
-		if util.IsExpectedError(err) {
-			return nil
-		}
-		return err
-	}
+	s.reloadAndPublishConfig()
 }
 
 func (s *ConfigService) reloadAndPublishConfig() {
@@ -114,5 +79,5 @@ func (s *ConfigService) reloadAndPublishConfig() {
 	}
 
 	s.SetConfig(newConfig)
-	s.bus.Publish(event.Event{Type: event.ConfigUpdated, Data: newConfig})
+	s.bus.Publish(event.Event{Type: event.ConfigUpdated, Data: newConfig, Ctx: s.Context()})
 }

@@ -1,11 +1,10 @@
 package config
 
 import (
-	"fmt"
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/i18n"
-	"erlang-solutions.com/cortex_agent/pkg/errors"
+	"erlang-solutions.com/cortex_agent/internal/util"
 	"github.com/BurntSushi/toml"
 )
 
@@ -39,21 +38,18 @@ func Load(path string) (Config, error) {
 
 	_, err := toml.DecodeFile(path, &config)
 	if err != nil {
-		return config, fmt.Errorf("%w: %v", errors.ErrConfigLoad, err)
+		return config, util.WrapWithBase(util.ErrConfigLoad, "failed to parse config file", err)
 	}
 
 	// Validate essential config fields
 	if config.Connection.Host == "" {
-		return config, fmt.Errorf("%w: %s", errors.ErrConfigLoad,
-			i18n.T("connection_host_missing", nil))
+		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_host_missing", nil), nil)
 	}
 	if config.Connection.User == "" {
-		return config, fmt.Errorf("%w: %s", errors.ErrConfigLoad,
-			i18n.T("connection_user_missing", nil))
+		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_user_missing", nil), nil)
 	}
 	if config.Connection.KeyFile == "" {
-		return config, fmt.Errorf("%w: %s", errors.ErrConfigLoad,
-			i18n.T("connection_keyfile_missing", nil))
+		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_keyfile_missing", nil), nil)
 	}
 
 	return config, nil
