@@ -10,16 +10,45 @@ import (
 	"erlang-solutions.com/cortex_agent/internal/event"
 	"erlang-solutions.com/cortex_agent/internal/i18n"
 	"erlang-solutions.com/cortex_agent/internal/service"
-
-	// Import SSH package to register it
-	_ "erlang-solutions.com/cortex_agent/internal/ssh"
+	"erlang-solutions.com/cortex_agent/internal/util"
 )
 
+type ServiceProvider interface {
+	Start(context.Context) error
+	Stop(context.Context) error
+}
+
+type ConfigProvider interface {
+	ServiceProvider
+	LoadConfig() (config.Config, error)
+}
+
+type ConnectionProvider interface {
+	ServiceProvider
+	Connect(context.Context, config.Config) error
+	SetConfig(config.Config)
+	IsJSONMode() bool
+	HasConnection() bool
+	GetConfig() config.Config
+	Context() context.Context
+}
+
+type SignalProvider interface {
+	ServiceProvider
+}
+
+type EventEmitter interface {
+	Publish(event.Event)
+	Subscribe(string, event.Handler) func()
+	SubscribeMultiple([]string, event.Handler) []func()
+	Unsubscribe(func())
+}
+
 type App struct {
-	configService     *service.ConfigService
-	connectionService *service.ConnectionService
-	signalService     *service.SignalService
-	eventBus          *event.Bus
+	configService     ConfigProvider
+	connectionService ConnectionProvider
+	signalService     SignalProvider
+	eventBus          EventEmitter
 }
 
 func NewApp(configFile string, jsonMode bool) *App {
@@ -63,7 +92,7 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) startServices(ctx context.Context) error {
 	services := []struct {
 		name    string
-		service interface{ Start(context.Context) error }
+		service ServiceProvider
 	}{
 		{"signal", a.signalService},
 		{"config", a.configService},
@@ -72,7 +101,8 @@ func (a *App) startServices(ctx context.Context) error {
 
 	for _, s := range services {
 		if err := s.service.Start(ctx); err != nil {
-			return fmt.Errorf("failed to start %s service: %w", s.name, err)
+			return util.NewError(util.ErrTypeConfig,
+				fmt.Sprintf("failed to start %s service", s.name), err)
 		}
 	}
 
@@ -83,7 +113,7 @@ func (a *App) stopServices(ctx context.Context) {
 	// Stop in reverse order of startup
 	services := []struct {
 		name string
-		svc  interface{ Stop(context.Context) error }
+		svc  ServiceProvider
 	}{
 		{"connection", a.connectionService},
 		{"config", a.configService},
@@ -116,8 +146,9 @@ func (a *App) runOnce(ctx context.Context, cfg config.Config) error {
 
 func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 	const (
-		shortDelay = 100 * time.Millisecond
-		longDelay  = 5 * time.Second
+		checkInterval = 100 * time.Millisecond
+		shortDelay    = 100 * time.Millisecond
+		longDelay     = 5 * time.Second
 	)
 
 	connSubs := a.eventBus.SubscribeMultiple(
@@ -146,7 +177,7 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 		}
 	}()
 
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(checkInterval)
 	defer ticker.Stop()
 
 	for {

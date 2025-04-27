@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -30,20 +29,8 @@ func RunMainLoop(ctx context.Context, conn transport.Connection, reconnectCh <-c
 		return nil
 	})
 
-	heartbeatTicker := time.NewTicker(30 * time.Second)
-	defer heartbeatTicker.Stop()
-
 	g.Go(func() error {
-		for {
-			select {
-			case <-gCtx.Done():
-				return nil
-			case <-heartbeatTicker.C:
-				if err := conn.SendPayload(map[string]string{"type": "heartbeat"}); err != nil {
-					return fmt.Errorf("%s: %w", i18n.T("heartbeat_error", map[string]any{"Error": err}), err)
-				}
-			}
-		}
+		return RunHeartbeat(gCtx, conn, 30*time.Second)
 	})
 
 	// Wait for any signal to stop
@@ -91,7 +78,7 @@ func readData(ctx context.Context, conn transport.Connection, errorCh chan<- err
 				return nil
 			}
 
-			wrappedErr := fmt.Errorf("%s: %w", i18n.T("transport_read_error", map[string]any{"Error": err}), err)
+			wrappedErr := util.NewError(util.ErrTypeConnection, i18n.T("transport_read_error", map[string]any{"Error": err}), err)
 			select {
 			case errorCh <- wrappedErr:
 			case <-ctx.Done():

@@ -3,14 +3,12 @@ package ssh
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"strconv"
 	"sync"
-	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
 	"erlang-solutions.com/cortex_agent/internal/i18n"
@@ -34,26 +32,31 @@ type Conn struct {
 
 type sshCreator struct{}
 
-func (c *sshCreator) CreateConnection(ctx context.Context, config config.Config, opts map[string]any) (transport.Connection, error) {
-	connectionOpts := ConnectOptions{
-		User:    config.Connection.User,
-		Host:    config.Connection.Host,
-		Port:    config.Connection.Port,
-		KeyFile: config.Connection.KeyFile,
-		Timeout: config.Connection.Timeout,
+func (c *sshCreator) CreateConnection(ctx context.Context, config config.Config, opts transport.ConnectionOptions) (transport.Connection, error) {
+	connectionOpts := transport.ConnectionOptions{
+		Protocol: "ssh",
+		Host:     config.Connection.Host,
+		Port:     config.Connection.Port,
+		User:     config.Connection.User,
+		KeyFile:  config.Connection.KeyFile,
+		Timeout:  config.Connection.Timeout,
 	}
 
-	if keyFile, ok := opts["key_file"].(string); ok && keyFile != "" {
-		connectionOpts.KeyFile = keyFile
+	// Override with options if provided
+	if opts.Host != "" {
+		connectionOpts.Host = opts.Host
 	}
-	if user, ok := opts["user"].(string); ok && user != "" {
-		connectionOpts.User = user
+	if opts.Port > 0 {
+		connectionOpts.Port = opts.Port
 	}
-	if host, ok := opts["host"].(string); ok && host != "" {
-		connectionOpts.Host = host
+	if opts.User != "" {
+		connectionOpts.User = opts.User
 	}
-	if port, ok := opts["port"].(int); ok && port > 0 {
-		connectionOpts.Port = port
+	if opts.KeyFile != "" {
+		connectionOpts.KeyFile = opts.KeyFile
+	}
+	if opts.Timeout > 0 {
+		connectionOpts.Timeout = opts.Timeout
 	}
 
 	return connectWithOptions(ctx, connectionOpts)
@@ -63,24 +66,16 @@ func init() {
 	transport.RegisterTransport("ssh", &sshCreator{})
 }
 
-type ConnectOptions struct {
-	User    string
-	Host    string
-	Port    int
-	KeyFile string
-	Timeout time.Duration
-}
-
-func connectWithOptions(ctx context.Context, opts ConnectOptions) (transport.Connection, error) {
+func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (transport.Connection, error) {
 	key, err := os.ReadFile(opts.KeyFile)
 	if err != nil {
-		return nil, util.WrapWithBase(util.ErrConnectionFailed,
+		return nil, util.NewError(util.ErrTypeConnection,
 			i18n.T("ssh_key_error", map[string]any{"Error": err}), err)
 	}
 
 	signer, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		return nil, util.WrapWithBase(util.ErrConnectionFailed,
+		return nil, util.NewError(util.ErrTypeConnection,
 			i18n.T("ssh_key_error", map[string]any{"Error": err}), err)
 	}
 
@@ -99,7 +94,8 @@ func connectWithOptions(ctx context.Context, opts ConnectOptions) (transport.Con
 
 	client, err := ssh.Dial("tcp", addr, sshConfig)
 	if err != nil {
-		return nil, util.WrapWithBase(util.ErrConnectionFailed, i18n.T("ssh_connect_failed", map[string]any{"Address": addr}), err)
+		return nil, util.NewError(util.ErrTypeConnection,
+			i18n.T("ssh_connect_failed", map[string]any{"Address": addr}), err)
 	}
 
 	log.Println(i18n.T("ssh_connection_established", nil))
@@ -115,31 +111,31 @@ func connectWithOptions(ctx context.Context, opts ConnectOptions) (transport.Con
 	session, err := client.NewSession()
 	if err != nil {
 		cleanup(client)
-		return nil, util.WrapWithBase(util.ErrSessionFailed, i18n.T("ssh_session_failed", nil), err)
+		return nil, util.NewError(util.ErrTypeSession, i18n.T("ssh_session_failed", nil), err)
 	}
 
 	if err = session.RequestSubsystem(Subsystem); err != nil {
 		cleanup(session, client)
-		return nil, util.WrapWithBase(util.ErrSubsystemFailed,
+		return nil, util.NewError(util.ErrTypeSubsystem,
 			i18n.T("ssh_subsystem_failed", map[string]any{"Subsystem": Subsystem}), err)
 	}
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
 		cleanup(session, client)
-		return nil, util.WrapWithBase(util.ErrSubsystemFailed, i18n.T("ssh_stdin_failed", nil), err)
+		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("ssh_stdin_failed", nil), err)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
 		cleanup(session, client)
-		return nil, util.WrapWithBase(util.ErrSubsystemFailed, i18n.T("ssh_stdout_failed", nil), err)
+		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("ssh_stdout_failed", nil), err)
 	}
 
 	stderr, err := session.StderrPipe()
 	if err != nil {
 		cleanup(session, client)
-		return nil, util.WrapWithBase(util.ErrSubsystemFailed, i18n.T("ssh_stderr_failed", nil), err)
+		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("ssh_stderr_failed", nil), err)
 	}
 
 	return &Conn{
@@ -190,12 +186,12 @@ func (c *Conn) SendPayload(payload any) error {
 	defer c.mu.Unlock()
 
 	if c.stdin == nil {
-		return fmt.Errorf("%s", i18n.T("connection_closed_payload", nil))
+		return util.NewError(util.ErrTypeConnection, i18n.T("connection_closed_payload", nil), nil)
 	}
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
+		return util.NewError(util.ErrTypeConnection, "failed to marshal payload", err)
 	}
 
 	data = append(data, '\n')

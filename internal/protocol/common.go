@@ -2,8 +2,10 @@ package protocol
 
 import (
 	"context"
+	"log"
 	"time"
 
+	"erlang-solutions.com/cortex_agent/internal/i18n"
 	"erlang-solutions.com/cortex_agent/internal/transport"
 	"erlang-solutions.com/cortex_agent/internal/util"
 )
@@ -19,13 +21,13 @@ func readStderr(ctx context.Context, conn transport.Connection) {
 		default:
 			n, err := conn.Stderr().Read(buffer)
 			if err != nil {
-				if util.IsExpectedError(err) {
-					return
-				}
 				return
 			}
 
-			_ = n
+			if n > 0 {
+				// Log actual stderr content for debugging
+				log.Printf("stderr: %s", string(buffer[:n]))
+			}
 		}
 	}
 }
@@ -40,7 +42,7 @@ func RunHeartbeat(ctx context.Context, conn transport.Connection, interval time.
 			return ctx.Err()
 		case <-ticker.C:
 			if err := conn.SendPayload(map[string]string{"type": "heartbeat"}); err != nil {
-				return err
+				return util.NewError(util.ErrTypeConnection, i18n.T("heartbeat_error", map[string]any{"Error": err}), err)
 			}
 		}
 	}

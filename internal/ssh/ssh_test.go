@@ -58,7 +58,9 @@ func TestConnectFailures(t *testing.T) {
 	cfg.Connection.KeyFile = "/does/not/exist/key.file"
 	cfg.Connection.Timeout = 1 * time.Second
 
-	_, err := transport.NewConnection(ctx, cfg)
+	_, err := transport.Connect(ctx, cfg,
+		transport.WithKeyFile("/does/not/exist/key.file"),
+	)
 	if err == nil {
 		t.Fatal("Expected error for nonexistent keyfile, got nil")
 	}
