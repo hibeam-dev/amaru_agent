@@ -11,7 +11,7 @@ func TestNewApp(t *testing.T) {
 		t.Fatal("Expected app to be non-nil")
 	}
 
-	components := map[string]interface{}{
+	components := map[string]any{
 		"configService":     app.configService,
 		"connectionService": app.connectionService,
 		"signalService":     app.signalService,
@@ -23,30 +23,8 @@ func TestNewApp(t *testing.T) {
 			t.Errorf("Expected %s to be non-nil", name)
 		}
 	}
-}
 
-func TestServices(t *testing.T) {
-	t.Run("StartServices", func(t *testing.T) {
-		t.Skip("Need to implement mock services")
-	})
-
-	t.Run("StopServices", func(t *testing.T) {
-		t.Skip("Need to implement mock services")
-	})
-
-	t.Run("RunOnce", func(t *testing.T) {
-		t.Skip("Need to implement mock ConnectionService")
-	})
-
-	t.Run("RunWithReconnect", func(t *testing.T) {
-		t.Skip("Need to implement mock services")
-	})
-
-	t.Run("AppRunCancel", func(t *testing.T) {
-		t.Skip("Need to implement mock services")
-	})
-
-	t.Run("TriggerReconnect", func(t *testing.T) {
-		t.Skip("Need to implement mock eventBus")
-	})
+	if !app.connectionService.IsJSONMode() {
+		t.Error("Expected connection service to be in JSON mode")
+	}
 }

@@ -63,7 +63,7 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) startServices(ctx context.Context) error {
 	services := []struct {
 		name    string
-		service service.Service
+		service interface{ Start(context.Context) error }
 	}{
 		{"signal", a.signalService},
 		{"config", a.configService},
@@ -83,7 +83,7 @@ func (a *App) stopServices(ctx context.Context) {
 	// Stop in reverse order of startup
 	services := []struct {
 		name string
-		svc  service.Service
+		svc  interface{ Stop(context.Context) error }
 	}{
 		{"connection", a.connectionService},
 		{"config", a.configService},
@@ -96,7 +96,7 @@ func (a *App) stopServices(ctx context.Context) {
 	for _, s := range services {
 		if err := s.svc.Stop(stopCtx); err != nil {
 			// Just log errors
-			log.Printf("%s", i18n.T("service_stop_error", map[string]interface{}{
+			log.Printf("%s", i18n.T("service_stop_error", map[string]any{
 				"Service": s.name,
 				"Error":   err,
 			}))
@@ -110,7 +110,7 @@ func (a *App) runOnce(ctx context.Context, cfg config.Config) error {
 	}
 
 	<-ctx.Done()
-	a.stopServices(context.Background())
+	a.stopServices(ctx)
 	return nil
 }
 
@@ -130,11 +130,9 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 		func(evt event.Event) {
 			switch evt.Type {
 			case event.ConnectionClosed:
-				time.Sleep(shortDelay)
-				a.triggerReconnect()
+				time.AfterFunc(shortDelay, a.triggerReconnect)
 			case event.ConnectionFailed:
-				time.Sleep(longDelay)
-				a.triggerReconnect()
+				time.AfterFunc(longDelay, a.triggerReconnect)
 			case event.ReconnectRequested:
 				a.triggerReconnect()
 			}
@@ -154,19 +152,20 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 	for {
 		select {
 		case <-ctx.Done():
-			a.stopServices(context.Background())
+			a.stopServices(ctx)
 			return nil
 
 		case <-ticker.C:
 			if *terminated {
-				a.stopServices(context.Background())
+				a.stopServices(ctx)
 				return nil
 			}
 
 			if !a.connectionService.HasConnection() {
 				cfg := a.connectionService.GetConfig()
 				if err := a.connectionService.Connect(ctx, cfg); err != nil {
-					time.Sleep(longDelay)
+					// Non-blocking delay before next connection attempt
+					ticker.Reset(longDelay)
 				}
 			}
 		}
@@ -174,5 +173,9 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 }
 
 func (a *App) triggerReconnect() {
-	a.eventBus.Publish(event.Event{Type: event.ReconnectRequested})
+	serviceCtx := a.connectionService.Context()
+	a.eventBus.Publish(event.Event{
+		Type: event.ReconnectRequested,
+		Ctx:  serviceCtx,
+	})
 }

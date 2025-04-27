@@ -51,7 +51,7 @@ func SetLanguage(lang string) {
 	ActiveLocalizer = i18n.NewLocalizer(Bundle, lang, DefaultLanguage)
 }
 
-func T(messageID string, templateData map[string]interface{}) string {
+func T(messageID string, templateData map[string]any) string {
 	if ActiveLocalizer == nil {
 		return messageID
 	}

@@ -1,94 +1,18 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
 	"erlang-solutions.com/cortex_agent/internal/event"
+	"erlang-solutions.com/cortex_agent/internal/transport/mocks"
+	"go.uber.org/mock/gomock"
 )
-
-type mockConnection struct {
-	stdin          *bytes.Buffer
-	stdout         *bytes.Buffer
-	stderr         *bytes.Buffer
-	stdinCloser    *mockWriteCloser
-	sendPayloadErr error
-	closeErr       error
-	mu             sync.Mutex
-}
-
-type mockWriteCloser struct {
-	*bytes.Buffer
-	closeErr error
-}
-
-func (m *mockWriteCloser) Close() error {
-	return m.closeErr
-}
-
-func newMockConnection() *mockConnection {
-	stdin := bytes.NewBuffer(nil)
-	stdinCloser := &mockWriteCloser{Buffer: stdin}
-	return &mockConnection{
-		stdin:       stdin,
-		stdinCloser: stdinCloser,
-		stdout:      bytes.NewBuffer(nil),
-		stderr:      bytes.NewBuffer(nil),
-	}
-}
-
-func (m *mockConnection) Stdin() io.WriteCloser {
-	return m.stdinCloser
-}
-
-func (m *mockConnection) Stdout() io.Reader {
-	return m.stdout
-}
-
-func (m *mockConnection) Stderr() io.Reader {
-	return m.stderr
-}
-
-func (m *mockConnection) SendPayload(payload interface{}) error {
-	if m.sendPayloadErr != nil {
-		return m.sendPayloadErr
-	}
-
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to serialize payload to JSON: %w", err)
-	}
-
-	_, err = m.stdin.Write(jsonData)
-	if err != nil {
-		return fmt.Errorf("failed to write to stdin: %w", err)
-	}
-
-	return nil
-}
-
-func (m *mockConnection) Close() error {
-	return m.closeErr
-}
-
-func (m *mockConnection) getWrittenData() []byte {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.stdin.Bytes()
-}
-
-func (m *mockConnection) setSendPayloadError(err error) {
-	m.sendPayloadErr = err
-}
 
 func TestConnectionService(t *testing.T) {
 	t.Run("JSONMode", func(t *testing.T) {
@@ -144,9 +68,19 @@ func TestConnectionService(t *testing.T) {
 	})
 
 	t.Run("SendConfig", func(t *testing.T) {
-		mockConn := newMockConnection()
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockConn := mocks.NewMockConnection(ctrl)
 		bus := event.NewBus()
 		svc := NewConnectionService(false, bus)
+
+		var capturedPayload []byte
+		mockConn.EXPECT().SendPayload(gomock.Any()).DoAndReturn(func(payload any) error {
+			data, _ := json.Marshal(payload)
+			capturedPayload = data
+			return nil
+		})
 
 		cfg := config.Config{}
 		cfg.Application.Hostname = "test-host"
@@ -157,17 +91,16 @@ func TestConnectionService(t *testing.T) {
 			t.Errorf("Expected no error on send, got: %v", err)
 		}
 
-		writtenData := mockConn.getWrittenData()
-		if len(writtenData) == 0 {
-			t.Error("No data was written to connection")
+		if len(capturedPayload) == 0 {
+			t.Error("No data was captured in the payload")
 		}
 
-		if !strings.Contains(string(writtenData), `"type":"config_update"`) {
-			t.Errorf("Expected config_update in payload, got: %s", string(writtenData))
+		if !strings.Contains(string(capturedPayload), `"type":"config_update"`) {
+			t.Errorf("Expected config_update in payload, got: %s", string(capturedPayload))
 		}
 
 		testErr := errors.New("test error")
-		mockConn.setSendPayloadError(testErr)
+		mockConn.EXPECT().SendPayload(gomock.Any()).Return(testErr)
 
 		if err := svc.sendConfig(mockConn, cfg); err == nil {
 			t.Error("Expected error when connection fails")
@@ -208,7 +141,7 @@ func TestConnectionService(t *testing.T) {
 
 		cfg := config.Config{}
 		cfg.Application.Hostname = "updated-host"
-		bus.Publish(event.Event{Type: event.ConfigUpdated, Data: cfg})
+		bus.Publish(event.Event{Type: event.ConfigUpdated, Data: cfg, Ctx: context.Background()})
 
 		time.Sleep(10 * time.Millisecond)
 		if svc.GetConfig().Application.Hostname != "updated-host" {

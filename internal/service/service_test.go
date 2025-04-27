@@ -2,32 +2,28 @@ package service
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/event"
 )
 
-type MockService struct {
-	name     string
-	bus      *event.Bus
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
+type MockServiceImpl struct {
+	Service
 	executed chan struct{}
 }
 
-func NewMockService(name string, bus *event.Bus) *MockService {
-	return &MockService{
-		name:     name,
-		bus:      bus,
+func NewMockService(name string, bus *event.Bus) *MockServiceImpl {
+	return &MockServiceImpl{
+		Service:  NewService(name, bus),
 		executed: make(chan struct{}),
 	}
 }
 
-func (s *MockService) Start(ctx context.Context) error {
-	s.ctx, s.cancel = context.WithCancel(ctx)
+func (s *MockServiceImpl) Start(ctx context.Context) error {
+	if err := s.Service.Start(ctx); err != nil {
+		return err
+	}
 
 	s.wg.Add(1)
 	go func() {
@@ -38,32 +34,9 @@ func (s *MockService) Start(ctx context.Context) error {
 	return nil
 }
 
-func (s *MockService) Stop(ctx context.Context) error {
-	if s.cancel != nil {
-		s.cancel()
-	}
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		s.wg.Wait()
-	}()
-
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(100 * time.Millisecond):
-		return nil
-	}
-}
-
-func TestServiceInterface(t *testing.T) {
+func TestServiceImpl(t *testing.T) {
 	bus := event.NewBus()
 	svc := NewMockService("test", bus)
-
-	var _ Service = svc
 
 	ctx := context.Background()
 	err := svc.Start(ctx)

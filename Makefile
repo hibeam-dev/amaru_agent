@@ -1,4 +1,4 @@
-.PHONY: build clean test lint
+.PHONY: build clean test lint mocks
 
 BINARY_NAME=cortex_agent
 BUILD_DIR=bin
@@ -28,6 +28,11 @@ cover-html:
 	@go test -coverprofile=$(BUILD_DIR)/coverage/coverage.out ./...
 	@go tool cover -html=$(BUILD_DIR)/coverage/coverage.out -o $(BUILD_DIR)/coverage/coverage.html
 	@echo "HTML coverage report generated at $(BUILD_DIR)/coverage/coverage.html"
+
+mocks:
+	@echo "Generating mocks..."
+	@go install go.uber.org/mock/mockgen@latest
+	@mockgen -destination=internal/transport/mocks/mock_connection.go -package=mocks erlang-solutions.com/cortex_agent/internal/transport Connection
 
 lint:
 	@echo "Running linter..."

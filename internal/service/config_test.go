@@ -54,127 +54,128 @@ func setupTestConfig(t *testing.T, content string) (string, func()) {
 	return tmpfile.Name(), cleanup
 }
 
-func TestConfigService_LoadConfig(t *testing.T) {
-	configPath, cleanup := setupTestConfig(t, testConfigContent)
-	defer cleanup()
+func TestConfigService(t *testing.T) {
+	t.Run("LoadConfig", func(t *testing.T) {
+		configPath, cleanup := setupTestConfig(t, testConfigContent)
+		defer cleanup()
 
-	bus := event.NewBus()
-	svc := NewConfigService(configPath, bus)
+		bus := event.NewBus()
+		svc := NewConfigService(configPath, bus)
 
-	cfg, err := svc.LoadConfig()
-	if err != nil {
-		t.Fatalf("Failed to load config: %v", err)
-	}
+		cfg, err := svc.LoadConfig()
+		if err != nil {
+			t.Fatalf("Failed to load config: %v", err)
+		}
 
-	if cfg.Connection.Host != "test-host" {
-		t.Errorf("Expected Connection.Host to be 'test-host', got '%s'", cfg.Connection.Host)
-	}
-	if cfg.Connection.Port != 22 {
-		t.Errorf("Expected Connection.Port to be 22, got %d", cfg.Connection.Port)
-	}
-	if cfg.Application.Hostname != "test-app-host" {
-		t.Errorf("Expected Application.Hostname to be 'test-app-host', got '%s'", cfg.Application.Hostname)
-	}
-	if cfg.Agent.Tags["env"] != "test" {
-		t.Errorf("Expected Agent.Tags['env'] to be 'test', got '%s'", cfg.Agent.Tags["env"])
-	}
-	if cfg.Logging.Level != "info" {
-		t.Errorf("Expected Logging.Level to be 'info', got '%s'", cfg.Logging.Level)
-	}
+		if cfg.Connection.Host != "test-host" {
+			t.Errorf("Expected Connection.Host to be 'test-host', got '%s'", cfg.Connection.Host)
+		}
+		if cfg.Connection.Port != 22 {
+			t.Errorf("Expected Connection.Port to be 22, got %d", cfg.Connection.Port)
+		}
+		if cfg.Application.Hostname != "test-app-host" {
+			t.Errorf("Expected Application.Hostname to be 'test-app-host', got '%s'", cfg.Application.Hostname)
+		}
+		if cfg.Agent.Tags["env"] != "test" {
+			t.Errorf("Expected Agent.Tags['env'] to be 'test', got '%s'", cfg.Agent.Tags["env"])
+		}
+		if cfg.Logging.Level != "info" {
+			t.Errorf("Expected Logging.Level to be 'info', got '%s'", cfg.Logging.Level)
+		}
 
-	storedCfg := svc.GetConfig()
-	if storedCfg.Connection.Host != "test-host" {
-		t.Errorf("Expected stored config Connection.Host to be 'test-host', got '%s'", storedCfg.Connection.Host)
-	}
-}
-
-func TestConfigService_StartStop(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "config.toml")
-	bus := event.NewBus()
-	svc := NewConfigService(tmpFile, bus)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	if err := svc.Start(ctx); err != nil {
-		t.Fatalf("Expected no error from Start(), got: %v", err)
-	}
-
-	if err := svc.Stop(ctx); err != nil {
-		t.Fatalf("Expected no error from Stop(), got: %v", err)
-	}
-}
-
-func TestConfigService_GetSetConfig(t *testing.T) {
-	bus := event.NewBus()
-	svc := NewConfigService("config.toml", bus)
-
-	testCfg := config.Config{}
-	testCfg.Application.Hostname = "test-host"
-	testCfg.Application.Port = 8080
-	testCfg.Agent.Tags = map[string]string{"env": "test"}
-
-	svc.SetConfig(testCfg)
-
-	retrievedCfg := svc.GetConfig()
-	if retrievedCfg.Application.Hostname != "test-host" {
-		t.Errorf("Expected hostname to be test-host, got %s", retrievedCfg.Application.Hostname)
-	}
-	if retrievedCfg.Application.Port != 8080 {
-		t.Errorf("Expected port to be 8080, got %d", retrievedCfg.Application.Port)
-	}
-	if retrievedCfg.Agent.Tags["env"] != "test" {
-		t.Errorf("Expected env tag to be test, got %s", retrievedCfg.Agent.Tags["env"])
-	}
-}
-
-func TestConfigService_ReloadAndPublishConfig(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping test in short mode")
-	}
-
-	configPath, cleanup := setupTestConfig(t, testConfigContent)
-	defer cleanup()
-
-	bus := event.NewBus()
-	svc := NewConfigService(configPath, bus)
-
-	var receivedConfig config.Config
-	configReceived := make(chan struct{})
-
-	unsub := bus.Subscribe(event.ConfigUpdated, func(evt event.Event) {
-		cfg, ok := evt.Data.(config.Config)
-		if ok {
-			receivedConfig = cfg
-			close(configReceived)
+		storedCfg := svc.GetConfig()
+		if storedCfg.Connection.Host != "test-host" {
+			t.Errorf("Expected stored config Connection.Host to be 'test-host', got '%s'", storedCfg.Connection.Host)
 		}
 	})
-	defer unsub()
 
-	svc.reloadAndPublishConfig()
+	t.Run("StartStop", func(t *testing.T) {
+		tmpFile := filepath.Join(t.TempDir(), "config.toml")
+		bus := event.NewBus()
+		svc := NewConfigService(tmpFile, bus)
 
-	select {
-	case <-configReceived:
-		if receivedConfig.Connection.Host != "test-host" {
-			t.Errorf("Expected Connection.Host to be 'test-host', got '%s'", receivedConfig.Connection.Host)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+
+		if err := svc.Start(ctx); err != nil {
+			t.Fatalf("Expected no error from Start(), got: %v", err)
 		}
 
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("Timed out waiting for config update event")
-	}
+		if err := svc.Stop(ctx); err != nil {
+			t.Fatalf("Expected no error from Stop(), got: %v", err)
+		}
+	})
 
-	storedCfg := svc.GetConfig()
-	if storedCfg.Connection.Host != "test-host" {
-		t.Errorf("Expected stored config Connection.Host to be 'test-host', got '%s'", storedCfg.Connection.Host)
-	}
-}
+	t.Run("GetSetConfig", func(t *testing.T) {
+		bus := event.NewBus()
+		svc := NewConfigService("config.toml", bus)
 
-func TestConfigService_SIGHUPHandler(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping test in short mode - requires file system")
-	}
+		testCfg := config.Config{}
+		testCfg.Application.Hostname = "test-host"
+		testCfg.Application.Port = 8080
+		testCfg.Agent.Tags = map[string]string{"env": "test"}
 
-	initialContent := `
+		svc.SetConfig(testCfg)
+
+		retrievedCfg := svc.GetConfig()
+		if retrievedCfg.Application.Hostname != "test-host" {
+			t.Errorf("Expected hostname to be test-host, got %s", retrievedCfg.Application.Hostname)
+		}
+		if retrievedCfg.Application.Port != 8080 {
+			t.Errorf("Expected port to be 8080, got %d", retrievedCfg.Application.Port)
+		}
+		if retrievedCfg.Agent.Tags["env"] != "test" {
+			t.Errorf("Expected env tag to be test, got %s", retrievedCfg.Agent.Tags["env"])
+		}
+	})
+
+	t.Run("ReloadAndPublishConfig", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("Skipping test in short mode")
+		}
+
+		configPath, cleanup := setupTestConfig(t, testConfigContent)
+		defer cleanup()
+
+		bus := event.NewBus()
+		svc := NewConfigService(configPath, bus)
+
+		var receivedConfig config.Config
+		configReceived := make(chan struct{})
+
+		unsub := bus.Subscribe(event.ConfigUpdated, func(evt event.Event) {
+			cfg, ok := evt.Data.(config.Config)
+			if ok {
+				receivedConfig = cfg
+				close(configReceived)
+			}
+		})
+		defer unsub()
+
+		svc.reloadAndPublishConfig()
+
+		select {
+		case <-configReceived:
+			if receivedConfig.Connection.Host != "test-host" {
+				t.Errorf("Expected Connection.Host to be 'test-host', got '%s'", receivedConfig.Connection.Host)
+			}
+
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("Timed out waiting for config update event")
+		}
+
+		storedCfg := svc.GetConfig()
+		if storedCfg.Connection.Host != "test-host" {
+			t.Errorf("Expected stored config Connection.Host to be 'test-host', got '%s'", storedCfg.Connection.Host)
+		}
+	})
+
+	t.Run("SIGHUPHandler", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("Skipping test in short mode - requires file system")
+		}
+
+		initialContent := `
 [Connection]
 Host = "initial-host"
 Port = 22
@@ -185,32 +186,32 @@ KeyFile = "/tmp/key.file"
 Hostname = "initial-app"
 Port = 8080
 `
-	configPath, cleanup := setupTestConfig(t, initialContent)
-	defer cleanup()
+		configPath, cleanup := setupTestConfig(t, initialContent)
+		defer cleanup()
 
-	bus := event.NewBus()
-	svc := NewConfigService(configPath, bus)
+		bus := event.NewBus()
+		svc := NewConfigService(configPath, bus)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-	if err := svc.Start(ctx); err != nil {
-		t.Fatalf("Failed to start service: %v", err)
-	}
-
-	var receivedConfig config.Config
-	configReceived := make(chan struct{})
-
-	unsub := bus.Subscribe(event.ConfigUpdated, func(evt event.Event) {
-		cfg, ok := evt.Data.(config.Config)
-		if ok {
-			receivedConfig = cfg
-			close(configReceived)
+		if err := svc.Start(ctx); err != nil {
+			t.Fatalf("Failed to start service: %v", err)
 		}
-	})
-	defer unsub()
 
-	updatedContent := `
+		var receivedConfig config.Config
+		configReceived := make(chan struct{})
+
+		unsub := bus.Subscribe(event.ConfigUpdated, func(evt event.Event) {
+			cfg, ok := evt.Data.(config.Config)
+			if ok {
+				receivedConfig = cfg
+				close(configReceived)
+			}
+		})
+		defer unsub()
+
+		updatedContent := `
 [Connection]
 Host = "updated-host"
 Port = 22
@@ -221,33 +222,35 @@ KeyFile = "/tmp/key.file"
 Hostname = "updated-app"
 Port = 8080
 `
-	if err := os.WriteFile(configPath, []byte(updatedContent), 0644); err != nil {
-		t.Fatalf("Failed to update config file: %v", err)
-	}
+		if err := os.WriteFile(configPath, []byte(updatedContent), 0644); err != nil {
+			t.Fatalf("Failed to update config file: %v", err)
+		}
 
-	bus.Publish(event.Event{
-		Type: event.SIGHUPReceived,
+		bus.Publish(event.Event{
+			Ctx:  context.Background(),
+			Type: event.SIGHUPReceived,
+		})
+
+		select {
+		case <-configReceived:
+			if receivedConfig.Connection.Host != "updated-host" {
+				t.Errorf("Expected Connection.Host to be 'updated-host', got '%s'", receivedConfig.Connection.Host)
+			}
+			if receivedConfig.Application.Hostname != "updated-app" {
+				t.Errorf("Expected Application.Hostname to be 'updated-app', got '%s'", receivedConfig.Application.Hostname)
+			}
+
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("Timed out waiting for config update event after SIGHUP")
+		}
+
+		storedCfg := svc.GetConfig()
+		if storedCfg.Connection.Host != "updated-host" {
+			t.Errorf("Expected stored config Connection.Host to be 'updated-host', got '%s'", storedCfg.Connection.Host)
+		}
+
+		if err := svc.Stop(ctx); err != nil {
+			t.Fatalf("Failed to stop service: %v", err)
+		}
 	})
-
-	select {
-	case <-configReceived:
-		if receivedConfig.Connection.Host != "updated-host" {
-			t.Errorf("Expected Connection.Host to be 'updated-host', got '%s'", receivedConfig.Connection.Host)
-		}
-		if receivedConfig.Application.Hostname != "updated-app" {
-			t.Errorf("Expected Application.Hostname to be 'updated-app', got '%s'", receivedConfig.Application.Hostname)
-		}
-
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("Timed out waiting for config update event after SIGHUP")
-	}
-
-	storedCfg := svc.GetConfig()
-	if storedCfg.Connection.Host != "updated-host" {
-		t.Errorf("Expected stored config Connection.Host to be 'updated-host', got '%s'", storedCfg.Connection.Host)
-	}
-
-	if err := svc.Stop(ctx); err != nil {
-		t.Fatalf("Failed to stop service: %v", err)
-	}
 }

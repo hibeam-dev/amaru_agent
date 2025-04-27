@@ -1,6 +1,7 @@
 package event
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -8,6 +9,7 @@ import (
 
 func TestEventBusBasicPublishSubscribe(t *testing.T) {
 	bus := NewBus()
+	ctx := context.Background()
 
 	var receivedEvent Event
 	eventReceived := false
@@ -21,6 +23,7 @@ func TestEventBusBasicPublishSubscribe(t *testing.T) {
 	bus.Publish(Event{
 		Type: "test_event",
 		Data: "test_data",
+		Ctx:  ctx,
 	})
 
 	time.Sleep(10 * time.Millisecond)
@@ -40,6 +43,7 @@ func TestEventBusBasicPublishSubscribe(t *testing.T) {
 
 func TestEventBusMultipleSubscribers(t *testing.T) {
 	bus := NewBus()
+	ctx := context.Background()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -61,6 +65,7 @@ func TestEventBusMultipleSubscribers(t *testing.T) {
 	bus.Publish(Event{
 		Type: "test_event",
 		Data: "test_data",
+		Ctx:  ctx,
 	})
 
 	if waitTimeout(&wg, 100*time.Millisecond) {
@@ -82,10 +87,11 @@ func TestEventBusMultipleSubscribers(t *testing.T) {
 
 func TestEventBusMultipleEventTypes(t *testing.T) {
 	bus := NewBus()
+	ctx := context.Background()
 	eventTypes := []string{"event1", "event2", "event3"}
 
 	var mu sync.Mutex
-	receivedEvents := make(map[string]interface{})
+	receivedEvents := make(map[string]any)
 
 	unsubs := make([]func(), 0, len(eventTypes))
 	defer func() {
@@ -108,6 +114,7 @@ func TestEventBusMultipleEventTypes(t *testing.T) {
 		bus.Publish(Event{
 			Type: eventType,
 			Data: eventType + "_data",
+			Ctx:  ctx,
 		})
 	}
 
@@ -136,6 +143,7 @@ func TestEventBusMultipleEventTypes(t *testing.T) {
 
 func TestEventBusUnsubscribe(t *testing.T) {
 	bus := NewBus()
+	ctx := context.Background()
 
 	received := false
 	unsub := bus.Subscribe("test_event", func(evt Event) {
@@ -147,6 +155,7 @@ func TestEventBusUnsubscribe(t *testing.T) {
 	bus.Publish(Event{
 		Type: "test_event",
 		Data: "test_data",
+		Ctx:  ctx,
 	})
 
 	time.Sleep(10 * time.Millisecond)
@@ -158,6 +167,7 @@ func TestEventBusUnsubscribe(t *testing.T) {
 
 func TestEventBusClose(t *testing.T) {
 	bus := NewBus()
+	ctx := context.Background()
 
 	received := false
 	unsub := bus.Subscribe("test_event", func(evt Event) {
@@ -170,6 +180,7 @@ func TestEventBusClose(t *testing.T) {
 	bus.Publish(Event{
 		Type: "test_event",
 		Data: "test_data",
+		Ctx:  ctx,
 	})
 
 	time.Sleep(10 * time.Millisecond)
