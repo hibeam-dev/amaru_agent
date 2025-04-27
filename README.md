@@ -61,7 +61,6 @@ make test
 │   ├── ssh/             # SSH connection implementation
 │   ├── transport/       # Connection interfaces and abstractions
 │   └── util/            # Shared utilities
-├── pkg/                 # Public packages
 ├── Makefile             # Build automation
 └── config.toml          # Default config
 ```
