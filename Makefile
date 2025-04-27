@@ -39,7 +39,7 @@ lint:
 	@if command -v golangci-lint &> /dev/null; then \
 		golangci-lint run ./...; \
 	else \
-		echo "golangci-lint not installed. Please install it from https://golangci-lint.run/usage/install/"; \
+		echo "golangci-lint not installed. Please install it from https://golangci-lint.run/"; \
 	fi
 
 fmt:
