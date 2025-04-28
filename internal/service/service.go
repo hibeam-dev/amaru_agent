@@ -32,6 +32,10 @@ func (s *Service) Start(ctx context.Context) error {
 }
 
 func (s *Service) Stop(ctx context.Context) error {
+	if s.cancel != nil {
+		s.cancel()
+	}
+
 	s.mu.Lock()
 	unsubscribes := s.unsubscribes
 	s.unsubscribes = nil
@@ -43,23 +47,19 @@ func (s *Service) Stop(ctx context.Context) error {
 		}
 	}
 
-	if s.cancel != nil {
-		s.cancel()
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	waitCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
 
 	done := make(chan struct{})
 	go func() {
-		defer close(done)
 		s.wg.Wait()
+		close(done)
 	}()
 
 	select {
 	case <-done:
 		return nil
-	case <-ctx.Done():
+	case <-waitCtx.Done():
 		return ctx.Err()
 	}
 }

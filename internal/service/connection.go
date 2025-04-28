@@ -66,7 +66,14 @@ func (s *ConnectionService) SetConfig(cfg config.Config) {
 }
 
 func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) error {
-	conn, err := transport.NewConnection(ctx, cfg)
+	conn, err := transport.Connect(ctx, cfg,
+		transport.WithProtocol(transport.DefaultProtocol),
+		transport.WithHost(cfg.Connection.Host),
+		transport.WithPort(cfg.Connection.Port),
+		transport.WithUser(cfg.Connection.User),
+		transport.WithKeyFile(cfg.Connection.KeyFile),
+		transport.WithTimeout(cfg.Connection.Timeout),
+	)
 	if err != nil {
 		s.bus.Publish(event.Event{Type: event.ConnectionFailed, Data: err, Ctx: ctx})
 		return util.WrapError(i18n.T("connection_error", nil), err)
@@ -110,11 +117,14 @@ func (s *ConnectionService) handleConfigEvent(evt event.Event) {
 		conn := s.connection
 		s.connectionMu.RUnlock()
 
+		needsReconnect := true
 		if conn != nil {
-			if err := s.sendConfig(conn, cfg); err != nil {
-				s.bus.Publish(event.Event{Type: event.ReconnectRequested, Ctx: s.Context()})
+			if err := s.sendConfig(conn, cfg); err == nil {
+				needsReconnect = false
 			}
-		} else {
+		}
+
+		if needsReconnect {
 			s.bus.Publish(event.Event{Type: event.ReconnectRequested, Ctx: s.Context()})
 		}
 	}
@@ -166,7 +176,7 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 	}
 
 	if err := conn.SendPayload(payload); err != nil {
-		return fmt.Errorf("%s", i18n.T("config_send_error", map[string]any{"Error": err}))
+		return util.NewError(util.ErrTypeConnection, i18n.T("config_send_error", map[string]any{"Error": err}), err)
 	}
 	return nil
 }
@@ -218,29 +228,34 @@ func (s *ConnectionService) runJSONMode(ctx context.Context, conn transport.Conn
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				errCh <- fmt.Errorf("panic in JSON mode handler: %v", r)
+				errCh <- util.NewError(util.ErrTypeConnection, fmt.Sprintf("panic in JSON mode handler: %v", r), nil)
 			}
 		}()
 		errCh <- protocol.HandleJSONMode(ctx, conn, os.Stdin, os.Stdout)
 	}()
 
-	heartbeatTicker := time.NewTicker(30 * time.Second)
-	defer heartbeatTicker.Stop()
+	heartbeatCtx, heartbeatCancel := context.WithCancel(ctx)
+	defer heartbeatCancel()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case err := <-errCh:
-			if err != nil && !util.IsExpectedError(err) {
-				return util.WrapError(i18n.T("json_mode_error", nil), err)
-			}
-			return err
-		case <-heartbeatTicker.C:
-			if err := conn.SendPayload(map[string]string{"type": "heartbeat"}); err != nil {
-				log.Printf("%s", i18n.T("heartbeat_error", map[string]any{"Error": err}))
-			}
+	heartbeatErr := make(chan error, 1)
+	go func() {
+		heartbeatErr <- protocol.RunHeartbeat(heartbeatCtx, conn, 30*time.Second)
+	}()
+
+	// Wait for either protocol handler or heartbeat to complete
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errCh:
+		if err != nil && !util.IsExpectedError(err) {
+			return util.WrapError(i18n.T("json_mode_error", nil), err)
 		}
+		return err
+	case err := <-heartbeatErr:
+		if err != nil && !util.IsExpectedError(err) {
+			log.Printf("%s", i18n.T("heartbeat_error", map[string]any{"Error": err}))
+		}
+		return err
 	}
 }
 

@@ -10,12 +10,43 @@ import (
 	"syscall"
 )
 
-var (
-	ErrConfigLoad       = errors.New("config load failed")
-	ErrConnectionFailed = errors.New("connection failed")
-	ErrSessionFailed    = errors.New("session failed")
-	ErrSubsystemFailed  = errors.New("subsystem failed")
+type ErrorType string
+
+const (
+	ErrTypeConfig     ErrorType = "config"
+	ErrTypeConnection ErrorType = "connection"
+	ErrTypeSession    ErrorType = "session"
+	ErrTypeSubsystem  ErrorType = "subsystem"
 )
+
+type AppError struct {
+	Type    ErrorType
+	Message string
+	Cause   error
+}
+
+func (e *AppError) Error() string {
+	return e.Message
+}
+
+func (e *AppError) Unwrap() error {
+	return e.Cause
+}
+
+var (
+	ErrConfigLoad       = NewError(ErrTypeConfig, "config load failed", nil)
+	ErrConnectionFailed = NewError(ErrTypeConnection, "connection failed", nil)
+	ErrSessionFailed    = NewError(ErrTypeSession, "session failed", nil)
+	ErrSubsystemFailed  = NewError(ErrTypeSubsystem, "subsystem failed", nil)
+)
+
+func NewError(errType ErrorType, message string, cause error) error {
+	return &AppError{
+		Type:    errType,
+		Message: message,
+		Cause:   cause,
+	}
+}
 
 func IsExpectedError(err error) bool {
 	return err == nil ||
@@ -43,7 +74,11 @@ func IsConnectionError(err error) bool {
 }
 
 func WrapWithBase(base error, msg string, err error) error {
-	return fmt.Errorf("%w: %s: %w", base, msg, err)
+	var appErr *AppError
+	if errors.As(base, &appErr) {
+		return NewError(appErr.Type, msg, err)
+	}
+	return fmt.Errorf("%w: %s: %v", base, msg, err)
 }
 
 func WrapError(msg string, err error) error {

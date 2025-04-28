@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"time"
@@ -84,7 +83,7 @@ func readResponses(ctx context.Context, conn transport.Connection, responseCh ch
 			}
 			log.Printf("%s", i18n.T("decode_error", map[string]any{"Error": err}))
 			select {
-			case errorCh <- fmt.Errorf("failed to read response: %w", err):
+			case errorCh <- util.NewError(util.ErrTypeConnection, "failed to read response", err):
 			case <-ctx.Done():
 			}
 			return
@@ -127,11 +126,11 @@ func processRequests(
 					log.Println(i18n.T("context_cancelled_read", nil))
 					return ctx.Err()
 				}
-				return fmt.Errorf("failed to decode input: %w", err)
+				return util.NewError(util.ErrTypeConnection, "failed to decode input", err)
 			}
 
 			if err := connEncoder.Encode(request); err != nil {
-				return fmt.Errorf("failed to send request: %w", err)
+				return util.NewError(util.ErrTypeConnection, "failed to send request", err)
 			}
 
 			responseTimer := time.NewTimer(ResponseTimeout)
@@ -146,7 +145,7 @@ func processRequests(
 				responseTimer.Stop()
 				if outEncoder != nil {
 					if err := outEncoder.Encode(response); err != nil {
-						return fmt.Errorf("failed to encode response: %w", err)
+						return util.NewError(util.ErrTypeConnection, "failed to encode response", err)
 					}
 				} else {
 					// In daemon mode, just log the response for now

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"erlang-solutions.com/cortex_agent/internal/util"
 	"github.com/BurntSushi/toml"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 	"golang.org/x/text/language"
@@ -29,7 +30,7 @@ func InitWithFS(fs embed.FS, defaultLang string) error {
 
 	entries, err := fs.ReadDir("locales")
 	if err != nil {
-		return fmt.Errorf("failed to read locales directory: %w", err)
+		return util.NewError(util.ErrTypeConfig, "failed to read locales directory", err)
 	}
 
 	for _, entry := range entries {
@@ -38,7 +39,7 @@ func InitWithFS(fs embed.FS, defaultLang string) error {
 
 			_, err := Bundle.LoadMessageFileFS(fs, filePath)
 			if err != nil {
-				return fmt.Errorf("failed to load message file %s: %w", filePath, err)
+				return util.NewError(util.ErrTypeConfig, fmt.Sprintf("failed to load message file %s", filePath), err)
 			}
 		}
 	}

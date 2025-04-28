@@ -9,6 +9,7 @@ import (
 	"erlang-solutions.com/cortex_agent/internal/app"
 	"erlang-solutions.com/cortex_agent/internal/daemon"
 	"erlang-solutions.com/cortex_agent/internal/i18n"
+	"erlang-solutions.com/cortex_agent/internal/registry"
 	"erlang-solutions.com/cortex_agent/internal/util"
 )
 
@@ -36,6 +37,8 @@ func main() {
 		// Can't use i18n.T here since i18n init failed
 		log.Printf("Warning: Failed to initialize localization: %v", err)
 	}
+
+	registry.InitTransports()
 
 	flag.Parse()
 
