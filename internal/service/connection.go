@@ -163,15 +163,13 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 	payload := struct {
 		Type        string                      `json:"type"`
 		Application transport.ApplicationConfig `json:"application"`
-		Agent       transport.AgentConfig       `json:"agent"`
 	}{
 		Type: "config_update",
 		Application: transport.ApplicationConfig{
 			Hostname: cfg.Application.Hostname,
 			Port:     cfg.Application.Port,
-		},
-		Agent: transport.AgentConfig{
-			Tags: cfg.Agent.Tags,
+			Tags:     cfg.Application.Tags,
+			Security: cfg.Application.Security,
 		},
 	}
 

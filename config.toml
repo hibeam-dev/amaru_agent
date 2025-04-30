@@ -7,14 +7,16 @@ keyfile = "/Users/ricardolanziano/.ssh/id_ed25519"
 
 [application]
 port = 8080
-hostname = "pto.example.com"
-
-[agent]
-[agent.tags]
-service = "pto-us"
+hostname = "example.com"
+[application.tags]
+service = "pto"
 version = "v1.2.3"
 environment = "production"
 region = "us-east-1"
+tier = "backend"
+[application.security]
+tls = false
+mtls = false
 
 [logging]
 level = "info"

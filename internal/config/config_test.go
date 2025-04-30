@@ -28,11 +28,11 @@ keyfile = "/path/to/key"
 [application]
 hostname = "test-app"
 port = 9090
-
-[agent]
-[agent.tags]
+[application.tags]
 service = "test-service"
 environment = "test"
+[application.security]
+secure = true
 
 [logging]
 level = "debug"
@@ -68,8 +68,8 @@ level = "debug"
 	if cfg.Application.Port != 9090 {
 		t.Errorf("Expected Application.Port to be 9090, got %d", cfg.Application.Port)
 	}
-	if cfg.Agent.Tags["service"] != "test-service" {
-		t.Errorf("Expected Agent.Tags['service'] to be 'test-service', got '%s'", cfg.Agent.Tags["service"])
+	if cfg.Application.Tags["service"] != "test-service" {
+		t.Errorf("Expected Agent.Tags['service'] to be 'test-service', got '%s'", cfg.Application.Tags["service"])
 	}
 	if cfg.Logging.Level != "debug" {
 		t.Errorf("Expected Logging.Level to be 'debug', got '%s'", cfg.Logging.Level)
