@@ -21,9 +21,8 @@ KeyFile = "/tmp/key.file"
 [Application]
 Hostname = "test-app-host"
 Port = 8080
-
-[Agent]
 Tags = { env = "test" }
+Security = { secure = true }
 
 [Logging]
 Level = "info"
@@ -76,8 +75,8 @@ func TestConfigService(t *testing.T) {
 		if cfg.Application.Hostname != "test-app-host" {
 			t.Errorf("Expected Application.Hostname to be 'test-app-host', got '%s'", cfg.Application.Hostname)
 		}
-		if cfg.Agent.Tags["env"] != "test" {
-			t.Errorf("Expected Agent.Tags['env'] to be 'test', got '%s'", cfg.Agent.Tags["env"])
+		if cfg.Application.Tags["env"] != "test" {
+			t.Errorf("Expected Application.Tags['env'] to be 'test', got '%s'", cfg.Application.Tags["env"])
 		}
 		if cfg.Logging.Level != "info" {
 			t.Errorf("Expected Logging.Level to be 'info', got '%s'", cfg.Logging.Level)
@@ -113,7 +112,8 @@ func TestConfigService(t *testing.T) {
 		testCfg := config.Config{}
 		testCfg.Application.Hostname = "test-host"
 		testCfg.Application.Port = 8080
-		testCfg.Agent.Tags = map[string]string{"env": "test"}
+		testCfg.Application.Tags = map[string]string{"env": "test"}
+		testCfg.Application.Security = map[string]bool{"secure": true}
 
 		svc.SetConfig(testCfg)
 
@@ -124,8 +124,8 @@ func TestConfigService(t *testing.T) {
 		if retrievedCfg.Application.Port != 8080 {
 			t.Errorf("Expected port to be 8080, got %d", retrievedCfg.Application.Port)
 		}
-		if retrievedCfg.Agent.Tags["env"] != "test" {
-			t.Errorf("Expected env tag to be test, got %s", retrievedCfg.Agent.Tags["env"])
+		if retrievedCfg.Application.Tags["env"] != "test" {
+			t.Errorf("Expected env tag to be test, got %s", retrievedCfg.Application.Tags["env"])
 		}
 	})
 

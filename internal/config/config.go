@@ -20,9 +20,8 @@ type Config struct {
 	Application struct {
 		Hostname string
 		Port     int
-	}
-	Agent struct {
-		Tags map[string]string
+		Tags     map[string]string
+		Security map[string]bool
 	}
 	Logging struct {
 		Level   string

@@ -7,14 +7,11 @@ type ConnectionConfig struct {
 
 type ConfigPayload struct {
 	Application ApplicationConfig `json:"application"`
-	Agent       AgentConfig       `json:"agent"`
 }
 
 type ApplicationConfig struct {
-	Hostname string `json:"hostname"`
-	Port     int    `json:"port"`
-}
-
-type AgentConfig struct {
-	Tags map[string]string `json:"tags"`
+	Hostname string            `json:"hostname"`
+	Port     int               `json:"port"`
+	Tags     map[string]string `json:"tags"`
+	Security map[string]bool   `json:"security"`
 }

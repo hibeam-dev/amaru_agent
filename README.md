@@ -118,10 +118,16 @@ keyfile = "/path/to/key" # Private key path
 port = 8080              # Local application port
 hostname = "example.com" # Local hostname
 
-[agent.tags]             # Custom metadata tags
+[application.tags]       # Custom metadata tags
 service = "service-name"
 version = "v1.2.3"
 environment = "production"
+region = "us-east-1"
+tier = "backend"
+
+[application.security]   # Security configuration
+tls = false
+mtls = false
 
 [logging]
 level = "info"           # Log level

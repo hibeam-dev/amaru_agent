@@ -36,7 +36,8 @@ func TestConnectionService(t *testing.T) {
 		testConfig := config.Config{}
 		testConfig.Application.Hostname = "test-host"
 		testConfig.Application.Port = 8080
-		testConfig.Agent.Tags = map[string]string{"env": "test"}
+		testConfig.Application.Tags = map[string]string{"env": "test"}
+		testConfig.Application.Security = map[string]bool{"secure": true}
 
 		svc.SetConfig(testConfig)
 		retrievedCfg := svc.GetConfig()
@@ -48,7 +49,7 @@ func TestConnectionService(t *testing.T) {
 		}{
 			{"hostname", retrievedCfg.Application.Hostname, "test-host"},
 			{"port", retrievedCfg.Application.Port, 8080},
-			{"tags.env", retrievedCfg.Agent.Tags["env"], "test"},
+			{"tags.env", retrievedCfg.Application.Tags["env"], "test"},
 		}
 
 		for _, e := range expected {
@@ -85,7 +86,7 @@ func TestConnectionService(t *testing.T) {
 		cfg := config.Config{}
 		cfg.Application.Hostname = "test-host"
 		cfg.Application.Port = 8080
-		cfg.Agent.Tags = map[string]string{"env": "test"}
+		cfg.Application.Tags = map[string]string{"env": "test"}
 
 		if err := svc.sendConfig(mockConn, cfg); err != nil {
 			t.Errorf("Expected no error on send, got: %v", err)
