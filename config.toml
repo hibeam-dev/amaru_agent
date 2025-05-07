@@ -4,10 +4,12 @@ port = 28961
 user = "agent"
 timeout = "30s"
 keyfile = "/Users/ricardolanziano/.ssh/id_ed25519"
+tunnel = true
 
 [application]
-port = 8080
+port = 4000
 hostname = "example.com"
+ip = "127.0.0.1"
 [application.tags]
 service = "pto"
 version = "v1.2.3"

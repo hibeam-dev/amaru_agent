@@ -5,11 +5,12 @@ proxy system.
 
 ## Features
 
-- Secure server connection
+- Secure server connection with reliable reconnection
 - TOML configuration with live reload
 - Background execution support
-- JSON protocol for application integration
 - Internationalization (i18n) support
+- Automatic connection health monitoring
+- TCP/TLS tunneling for local application proxying
 
 ## Installation
 
@@ -96,7 +97,6 @@ nohup ./bin/cortex_agent -pid > /dev/null 2>&1 &
 ### Command-line Options
 
 - `-config`: Config file path (default: config.toml)
-- `-json`: Enable JSON communication mode
 - `-pid`: Write PID to ~/.cortex_agent/cortex_agent.pid
 
 ### Signal Handling
@@ -113,10 +113,12 @@ port = 22000             # Server port
 user = "agent"           # Username
 timeout = "30s"          # Connection timeout
 keyfile = "/path/to/key" # Private key path
+tunnel = true            # Enable TCP tunneling
 
 [application]
 port = 8080              # Local application port
 hostname = "example.com" # Local hostname
+ip = "127.0.0.1"         # IP address to connect to for local application
 
 [application.tags]       # Custom metadata tags
 service = "service-name"
@@ -136,10 +138,12 @@ logfile = "/path/to/log" # Log file path
 
 ## Architecture
 
-Two primary operating modes:
+The agent maintains a persistent and reliable connection to the remote server:
 
-1. **Standard mode**: Maintains persistent connection to remote server
-2. **JSON mode**: Facilitates message exchange between local app and server
+- **Automatic reconnection**: Implements exponential backoff when connections fail
+- **Connection health monitoring**: Actively checks connection health
+- **Graceful recovery**: Handles network interruptions seamlessly
+- **TCP/TLS tunneling**: Proxies traffic between local applications and remote services with optional TLS support
 
 ### Design Principles
 

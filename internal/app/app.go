@@ -3,7 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
+	"math/rand"
+	"sync"
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/config"
@@ -27,7 +28,6 @@ type ConnectionProvider interface {
 	ServiceProvider
 	Connect(context.Context, config.Config) error
 	SetConfig(config.Config)
-	IsJSONMode() bool
 	HasConnection() bool
 	GetConfig() config.Config
 	Context() context.Context
@@ -44,21 +44,28 @@ type EventEmitter interface {
 	Unsubscribe(func())
 }
 
+type ProxyProvider interface {
+	ServiceProvider
+	SetConfig(config.Config)
+}
+
 type App struct {
 	configService     ConfigProvider
 	connectionService ConnectionProvider
 	signalService     SignalProvider
+	proxyService      ProxyProvider
 	eventBus          EventEmitter
 }
 
-func NewApp(configFile string, jsonMode bool) *App {
+func NewApp(configFile string) *App {
 	eventBus := event.NewBus()
 
 	return &App{
 		eventBus:          eventBus,
 		configService:     service.NewConfigService(configFile, eventBus),
-		connectionService: service.NewConnectionService(jsonMode, eventBus),
+		connectionService: service.NewConnectionService(eventBus),
 		signalService:     service.NewDefaultSignalService(eventBus),
+		proxyService:      service.NewProxyService(eventBus),
 	}
 }
 
@@ -76,6 +83,7 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	a.connectionService.SetConfig(cfg)
+	a.proxyService.SetConfig(cfg)
 
 	var terminationReceived bool
 	terminationSub := a.eventBus.Subscribe(event.TerminationSignal, func(evt event.Event) {
@@ -83,10 +91,11 @@ func (a *App) Run(ctx context.Context) error {
 	})
 	defer a.eventBus.Unsubscribe(terminationSub)
 
-	if a.connectionService.IsJSONMode() {
-		return a.runOnce(mainCtx, cfg)
-	}
 	return a.runWithReconnect(mainCtx, &terminationReceived)
+}
+
+func (a *App) GetEventBus() EventEmitter {
+	return a.eventBus
 }
 
 func (a *App) startServices(ctx context.Context) error {
@@ -97,6 +106,7 @@ func (a *App) startServices(ctx context.Context) error {
 		{"signal", a.signalService},
 		{"config", a.configService},
 		{"connection", a.connectionService},
+		{"proxy", a.proxyService},
 	}
 
 	for _, s := range services {
@@ -115,6 +125,7 @@ func (a *App) stopServices(ctx context.Context) {
 		name string
 		svc  ServiceProvider
 	}{
+		{"proxy", a.proxyService},
 		{"connection", a.connectionService},
 		{"config", a.configService},
 		{"signal", a.signalService},
@@ -125,31 +136,53 @@ func (a *App) stopServices(ctx context.Context) {
 
 	for _, s := range services {
 		if err := s.svc.Stop(stopCtx); err != nil {
-			// Just log errors
-			log.Printf("%s", i18n.T("service_stop_error", map[string]any{
+			util.LogError(i18n.T("service_stop_error", map[string]any{
 				"Service": s.name,
-				"Error":   err,
-			}))
+			}), err)
 		}
 	}
 }
 
-func (a *App) runOnce(ctx context.Context, cfg config.Config) error {
-	if err := a.connectionService.Connect(ctx, cfg); err != nil {
-		return err
-	}
-
-	<-ctx.Done()
-	a.stopServices(ctx)
-	return nil
-}
-
 func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 	const (
-		checkInterval = 100 * time.Millisecond
-		shortDelay    = 100 * time.Millisecond
-		longDelay     = 5 * time.Second
+		checkInterval     = 100 * time.Millisecond
+		minReconnectDelay = 100 * time.Millisecond
+		maxReconnectDelay = 60 * time.Second
 	)
+
+	var (
+		currentDelay = minReconnectDelay
+		backoffMu    sync.Mutex
+		resetBackoff = make(chan struct{}, 1)
+	)
+
+	resetBackoffFn := func() {
+		backoffMu.Lock()
+		currentDelay = minReconnectDelay
+		backoffMu.Unlock()
+
+		select {
+		case resetBackoff <- struct{}{}:
+		default:
+		}
+	}
+
+	nextBackoffDelay := func() time.Duration {
+		backoffMu.Lock()
+		defer backoffMu.Unlock()
+
+		// Exponential backoff with jitter (±20%)
+		delay := currentDelay
+		jitter := float64(delay) * 0.2 * (2*rand.Float64() - 1)
+		delayWithJitter := delay + time.Duration(jitter)
+
+		currentDelay *= 2
+		if currentDelay > maxReconnectDelay {
+			currentDelay = maxReconnectDelay
+		}
+
+		return delayWithJitter
+	}
 
 	connSubs := a.eventBus.SubscribeMultiple(
 		[]string{
@@ -160,10 +193,20 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 		},
 		func(evt event.Event) {
 			switch evt.Type {
+			case event.ConnectionEstablished:
+				resetBackoffFn()
 			case event.ConnectionClosed:
-				time.AfterFunc(shortDelay, a.triggerReconnect)
+				delay := nextBackoffDelay()
+				util.Info(i18n.T("connection_reconnecting", map[string]any{
+					"Delay": delay.Truncate(time.Millisecond).String(),
+				}))
+				time.AfterFunc(delay, a.triggerReconnect)
 			case event.ConnectionFailed:
-				time.AfterFunc(longDelay, a.triggerReconnect)
+				delay := nextBackoffDelay()
+				util.Info(i18n.T("connection_reconnecting", map[string]any{
+					"Delay": delay.Truncate(time.Millisecond).String(),
+				}))
+				time.AfterFunc(delay, a.triggerReconnect)
 			case event.ReconnectRequested:
 				a.triggerReconnect()
 			}
@@ -186,6 +229,9 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 			a.stopServices(ctx)
 			return nil
 
+		case <-resetBackoff:
+			ticker.Reset(checkInterval)
+
 		case <-ticker.C:
 			if *terminated {
 				a.stopServices(ctx)
@@ -195,8 +241,10 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 			if !a.connectionService.HasConnection() {
 				cfg := a.connectionService.GetConfig()
 				if err := a.connectionService.Connect(ctx, cfg); err != nil {
-					// Non-blocking delay before next connection attempt
-					ticker.Reset(longDelay)
+					delay := nextBackoffDelay()
+					ticker.Reset(delay)
+				} else {
+					resetBackoffFn()
 				}
 			}
 		}

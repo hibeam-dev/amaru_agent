@@ -2,9 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"log"
-	"os"
 	"sync"
 	"time"
 
@@ -18,18 +15,16 @@ import (
 
 type ConnectionService struct {
 	Service
-	jsonMode bool
-
-	connectionMu sync.RWMutex
-	connection   transport.Connection
-	config       config.Config
+	connectionMu      sync.RWMutex
+	connection        transport.Connection
+	config            config.Config
+	monitorCancelFunc context.CancelFunc
 }
 
-func NewConnectionService(jsonMode bool, bus *event.Bus) *ConnectionService {
-	return &ConnectionService{
-		Service:  NewService("connection", bus),
-		jsonMode: jsonMode,
-	}
+func NewConnectionService(bus *event.Bus) *ConnectionService {
+	svc := &ConnectionService{}
+	svc.Service = NewService("connection", bus)
+	return svc
 }
 
 func (s *ConnectionService) Start(ctx context.Context) error {
@@ -44,13 +39,14 @@ func (s *ConnectionService) Start(ctx context.Context) error {
 }
 
 func (s *ConnectionService) Stop(ctx context.Context) error {
+	if s.monitorCancelFunc != nil {
+		s.monitorCancelFunc()
+		s.monitorCancelFunc = nil
+	}
+
 	_ = s.closeConnection(ctx)
 
 	return s.Service.Stop(ctx)
-}
-
-func (s *ConnectionService) IsJSONMode() bool {
-	return s.jsonMode
 }
 
 func (s *ConnectionService) GetConfig() config.Config {
@@ -73,10 +69,11 @@ func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) erro
 		transport.WithUser(cfg.Connection.User),
 		transport.WithKeyFile(cfg.Connection.KeyFile),
 		transport.WithTimeout(cfg.Connection.Timeout),
+		transport.WithTunnel(cfg.Connection.Tunnel),
 	)
 	if err != nil {
 		s.bus.Publish(event.Event{Type: event.ConnectionFailed, Data: err, Ctx: ctx})
-		return util.WrapError(i18n.T("connection_error", nil), err)
+		return util.WrapError(i18n.T("connection_error", map[string]any{"Error": err}), err)
 	}
 
 	if err := s.sendConfig(conn, cfg); err != nil {
@@ -84,17 +81,33 @@ func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) erro
 		return err
 	}
 
+	if s.monitorCancelFunc != nil {
+		s.monitorCancelFunc()
+		s.monitorCancelFunc = nil
+	}
+
 	s.connectionMu.Lock()
 	s.config = cfg
 	s.connection = conn
 	s.connectionMu.Unlock()
 
-	s.bus.Publish(event.Event{Type: event.ConnectionEstablished, Ctx: ctx})
+	s.bus.Publish(event.Event{Type: event.ConnectionEstablished, Data: conn, Ctx: ctx})
+
+	// Start connection loop
 	s.wg.Add(1)
 	go func(ctx context.Context) {
 		defer s.wg.Done()
 		s.runConnectionLoop(ctx)
 	}(ctx)
+
+	// Start connection monitoring
+	monitorCtx, cancelMonitor := context.WithCancel(ctx)
+	s.monitorCancelFunc = cancelMonitor
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.monitorConnection(monitorCtx)
+	}()
 
 	return nil
 }
@@ -170,6 +183,7 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 			Port:     cfg.Application.Port,
 			Tags:     cfg.Application.Tags,
 			Security: cfg.Application.Security,
+			Tunnel:   cfg.Connection.Tunnel,
 		},
 	}
 
@@ -182,7 +196,6 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 func (s *ConnectionService) runConnectionLoop(ctx context.Context) {
 	s.connectionMu.RLock()
 	conn := s.connection
-	jsonMode := s.jsonMode
 	s.connectionMu.RUnlock()
 
 	if conn == nil {
@@ -192,23 +205,18 @@ func (s *ConnectionService) runConnectionLoop(ctx context.Context) {
 	loopCtx, cancelLoop := context.WithCancel(ctx)
 	defer cancelLoop()
 
-	handler := s.runStandardMode
-	if jsonMode {
-		handler = s.runJSONMode
-	}
-
 	var err error
 	handlerDone := make(chan struct{})
 	go func() {
 		defer close(handlerDone)
-		err = handler(loopCtx, conn)
+		err = s.runProtocolMode(loopCtx, conn)
 	}()
 
 	select {
 	case <-handlerDone:
 		if err != nil && !util.IsExpectedError(err) {
 			if util.IsConnectionError(err) {
-				err = util.WrapError(i18n.T("connection_lost", nil), err)
+				err = util.WrapError(i18n.T("connection_lost", map[string]any{"Error": err}), err)
 			}
 			s.bus.Publish(event.Event{Type: event.ConnectionFailed, Data: err, Ctx: ctx})
 		}
@@ -220,44 +228,7 @@ func (s *ConnectionService) runConnectionLoop(ctx context.Context) {
 	_ = s.closeConnection(ctx)
 }
 
-func (s *ConnectionService) runJSONMode(ctx context.Context, conn transport.Connection) error {
-	errCh := make(chan error, 1)
-
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				errCh <- util.NewError(util.ErrTypeConnection, fmt.Sprintf("panic in JSON mode handler: %v", r), nil)
-			}
-		}()
-		errCh <- protocol.HandleJSONMode(ctx, conn, os.Stdin, os.Stdout)
-	}()
-
-	heartbeatCtx, heartbeatCancel := context.WithCancel(ctx)
-	defer heartbeatCancel()
-
-	heartbeatErr := make(chan error, 1)
-	go func() {
-		heartbeatErr <- protocol.RunHeartbeat(heartbeatCtx, conn, 30*time.Second)
-	}()
-
-	// Wait for either protocol handler or heartbeat to complete
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-errCh:
-		if err != nil && !util.IsExpectedError(err) {
-			return util.WrapError(i18n.T("json_mode_error", nil), err)
-		}
-		return err
-	case err := <-heartbeatErr:
-		if err != nil && !util.IsExpectedError(err) {
-			log.Printf("%s", i18n.T("heartbeat_error", map[string]any{"Error": err}))
-		}
-		return err
-	}
-}
-
-func (s *ConnectionService) runStandardMode(ctx context.Context, conn transport.Connection) error {
+func (s *ConnectionService) runProtocolMode(ctx context.Context, conn transport.Connection) error {
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
 
@@ -272,4 +243,82 @@ func (s *ConnectionService) runStandardMode(ctx context.Context, conn transport.
 	}
 
 	return nil
+}
+
+func (s *ConnectionService) monitorConnection(ctx context.Context) {
+	const (
+		healthCheckInterval = 5 * time.Second
+		minReconnectDelay   = 1 * time.Second
+		maxReconnectDelay   = 30 * time.Second
+	)
+
+	ticker := time.NewTicker(healthCheckInterval)
+	defer ticker.Stop()
+
+	var reconnectDelay = minReconnectDelay
+	var lastReconnectAttempt time.Time
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.connectionMu.RLock()
+			haveConnection := s.connection != nil
+			config := s.config
+			s.connectionMu.RUnlock()
+
+			if !haveConnection {
+				now := time.Now()
+				if now.Sub(lastReconnectAttempt) < reconnectDelay {
+					continue
+				}
+
+				lastReconnectAttempt = now
+
+				util.Info(i18n.T("attempting_reconnection", map[string]any{
+					"Host": config.Connection.Host,
+					"Port": config.Connection.Port,
+				}))
+
+				if err := s.Connect(ctx, config); err != nil {
+					reconnectDelay *= 2
+					if reconnectDelay > maxReconnectDelay {
+						reconnectDelay = maxReconnectDelay
+					}
+
+					util.LogError(i18n.T("reconnection_failed", map[string]any{
+						"Delay": reconnectDelay.String(),
+					}), err)
+				} else {
+					reconnectDelay = minReconnectDelay
+					util.Info(i18n.T("reconnection_successful", map[string]any{}))
+				}
+				continue
+			}
+
+			s.connectionMu.RLock()
+			conn := s.connection
+			s.connectionMu.RUnlock()
+
+			checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			err := conn.CheckHealth(checkCtx)
+			cancel()
+
+			if err != nil {
+				util.LogError(i18n.T("connection_health_check_failed", map[string]any{}), err)
+
+				_ = s.closeConnection(ctx)
+
+				lastReconnectAttempt = time.Now()
+				reconnectDelay = minReconnectDelay
+
+				if err := s.Connect(ctx, config); err != nil {
+					util.LogError(i18n.T("immediate_reconnect_failed", map[string]any{}), err)
+				} else {
+					util.Info(i18n.T("immediate_reconnect_successful", map[string]any{}))
+				}
+			}
+		}
+	}
 }

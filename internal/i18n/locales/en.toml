@@ -18,8 +18,23 @@ other = "Failed to send heartbeat: {{.Error}}"
 [reconnecting]
 other = "Reconnecting due to configuration change..."
 
-[json_mode_error]
-other = "JSON mode error: {{.Error}}"
+[connection_reconnecting]
+other = "Connection lost. Reconnecting in {{.Delay}}..."
+
+[attempting_reconnection]
+other = "Attempting to reconnect to cortex server at {{.Host}}:{{.Port}}..."
+
+[reconnection_failed]
+other = "Reconnection failed: {{.Error}}. Will retry in {{.Delay}}."
+
+[reconnection_successful]
+other = "Reconnection successful."
+
+[immediate_reconnect_failed] 
+other = "Immediate reconnection failed: {{.Error}}"
+
+[immediate_reconnect_successful]
+other = "Immediate reconnection successful."
 
 [main_loop_error]
 other = "Main loop error: {{.Error}}"
@@ -80,8 +95,6 @@ other = "Configuration updated successfully."
 [config_sent]
 other = "Configuration sent to cortex server successfully."
 
-# JSON protocol
-
 [connection_closed]
 other = "Connection closed normally"
 
@@ -90,21 +103,6 @@ other = "Connection error: {{.Error}}"
 
 [reconnection_requested]
 other = "Reconnection requested"
-
-[decode_error]
-other = "Error decoding server response: {{.Error}}"
-
-[server_response]
-other = "Received response from server: {{.Response}}"
-
-[json_shutdown]
-other = "Context cancelled, shutting down JSON mode..."
-
-[response_no_writer]
-other = "Received response (no output writer): {{.Response}}"
-
-[response_timeout]
-other = "Timeout waiting for response"
 
 # SSH connection
 [ssh_connect_failed]
@@ -147,6 +145,99 @@ other = "Error closing client: {{.Error}}"
 [connection_closed_payload]
 other = "Connection closed, cannot send data"
 
+[connection_health_check_failed]
+other = "Connection health check failed: {{.Error}}"
+
+[connection_health_check_timeout]
+other = "Connection health check timed out"
+
+[tunnel_connection_error]
+other = "Failed to establish tunnel connection to {{.Address}}: {{.Error}}"
+
+[tunnel_no_ssh_connection]
+other = "Cannot establish tunnel, connection to cortex server not available"
+
+[tunnel_connecting]
+other = "Establishing tunnel connection to {{.Address}} (TLS: {{.UseTLS}})..."
+
+[tunnel_connection_established]
+other = "Tunnel connection established successfully"
+
+[tunnel_connection_closing]
+other = "Closing tunnel connection"
+
+[tunnel_connection_close_error]
+other = "Error closing tunnel connection: {{.Error}}"
+
+[tunnel_data_error]
+other = "Error in tunnel data transfer: {{.Error}}"
+
+[tunnel_read_from_ssh_error]
+other = "Error reading data from SSH: {{.Error}}"
+
+[tunnel_write_to_local_error]
+other = "Error writing data to local application: {{.Error}}"
+
+[tunnel_read_from_local_error]
+other = "Error reading data from local application: {{.Error}}"
+
+[tunnel_write_to_ssh_error]
+other = "Error writing data to SSH: {{.Error}}"
+
+[tunnel_shutdown]
+other = "Tunnel connection shutting down"
+
+[tunnel_health_check_failed]
+other = "Tunnel health check failed"
+
+[tunnel_attempting_reconnection]
+other = "Attempting to reconnect tunnel..."
+
+[tunnel_reconnection_failed]
+other = "Tunnel reconnection failed: {{.Error}}. Will retry in {{.Delay}}."
+
+[tunnel_reconnection_successful]
+other = "Tunnel reconnection successful."
+
+[tunnel_immediate_reconnect_failed]
+other = "Immediate tunnel reconnection failed: {{.Error}}"
+
+[tunnel_immediate_reconnect_successful]
+other = "Immediate tunnel reconnection successful."
+
+[tunnel_subsystem_creating]
+other = "Creating tunnel subsystem..."
+
+[tunnel_session_failed]
+other = "Failed to create tunnel session"
+
+[tunnel_stdin_failed]
+other = "Failed to get tunnel input pipe"
+
+[tunnel_stdout_failed]
+other = "Failed to get tunnel output pipe"
+
+[tunnel_subsystem_established]
+other = "Tunnel subsystem established successfully"
+
+[tunnel_reconnection_needed]
+other = "Tunnel connection needs reconnection: {{.Error}}"
+
+[tunnel_auto_reconnect_starting]
+other = "Starting automatic tunnel reconnection..."
+
+[tunnel_auto_reconnect_failed]
+other = "Automatic tunnel reconnection failed: {{.Error}}"
+
+[tunnel_auto_reconnect_successful]
+other = "Automatic tunnel reconnection successful."
+
+[tunnel_http_connection_closed]
+other = "HTTP connection closed normally (expected for HTTP requests)"
+
+[tunnel_binary_channels_unavailable]
+other = "Binary channels unavailable for tunnel operations"
+
 [marshal_payload_error]
 other = "Failed to serialize data: {{.Error}}"
 
@@ -172,7 +263,6 @@ other = "Connection failed"
 [app_termination_signal]
 other = "Termination signal received, shutting down application"
 
-
 [service_stop_error]
 other = "Error stopping {{.Service}} service: {{.Error}}"
 
@@ -185,9 +275,6 @@ other = "Usage: cortex_agent [options]"
 
 [options_header]
 other = "Options:"
-
-[flag_json_desc]
-other = "Enable JSON communication mode for application integration"
 
 [flag_pid_desc]
 other = "Write PID file to ~/.cortex_agent/cortex_agent.pid"

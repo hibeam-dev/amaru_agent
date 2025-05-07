@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -17,17 +16,23 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const Subsystem = "cortex"
+const (
+	Subsystem      = "cortex"
+	ProxySubsystem = "proxy"
+)
 
 var _ transport.Connection = (*Conn)(nil)
 
 type Conn struct {
-	client  *ssh.Client
-	session *ssh.Session
-	stdin   io.WriteCloser
-	stdout  io.Reader
-	stderr  io.Reader
-	mu      sync.Mutex
+	client       *ssh.Client
+	session      *ssh.Session
+	stdin        io.WriteCloser
+	stdout       io.Reader
+	stderr       io.Reader
+	proxySession *ssh.Session
+	proxyInput   io.WriteCloser
+	proxyOutput  io.Reader
+	mu           sync.Mutex
 }
 
 type sshCreator struct{}
@@ -40,6 +45,7 @@ func (c *sshCreator) CreateConnection(ctx context.Context, config config.Config,
 		User:     config.Connection.User,
 		KeyFile:  config.Connection.KeyFile,
 		Timeout:  config.Connection.Timeout,
+		Tunnel:   config.Connection.Tunnel,
 	}
 
 	// Override with options if provided
@@ -87,7 +93,7 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 	}
 
 	addr := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
-	log.Printf("%s", i18n.T("ssh_dialing", map[string]any{
+	util.Info(i18n.T("ssh_dialing", map[string]any{
 		"Host": opts.Host,
 		"Port": opts.Port,
 	}))
@@ -98,7 +104,7 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 			i18n.T("ssh_connect_failed", map[string]any{"Address": addr}), err)
 	}
 
-	log.Println(i18n.T("ssh_connection_established", nil))
+	util.Info(i18n.T("ssh_connection_established", map[string]any{}))
 
 	cleanup := func(closables ...io.Closer) {
 		for _, c := range closables {
@@ -108,10 +114,11 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 		}
 	}
 
+	// Create the main control session (JSON protocol)
 	session, err := client.NewSession()
 	if err != nil {
 		cleanup(client)
-		return nil, util.NewError(util.ErrTypeSession, i18n.T("ssh_session_failed", nil), err)
+		return nil, util.NewError(util.ErrTypeSession, i18n.T("ssh_session_failed", map[string]any{}), err)
 	}
 
 	if err = session.RequestSubsystem(Subsystem); err != nil {
@@ -123,27 +130,68 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 	stdin, err := session.StdinPipe()
 	if err != nil {
 		cleanup(session, client)
-		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("ssh_stdin_failed", nil), err)
+		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("ssh_stdin_failed", map[string]any{}), err)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
 		cleanup(session, client)
-		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("ssh_stdout_failed", nil), err)
+		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("ssh_stdout_failed", map[string]any{}), err)
 	}
 
 	stderr, err := session.StderrPipe()
 	if err != nil {
 		cleanup(session, client)
-		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("ssh_stderr_failed", nil), err)
+		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("ssh_stderr_failed", map[string]any{}), err)
 	}
 
+	if !opts.Tunnel {
+		return &Conn{
+			client:  client,
+			session: session,
+			stdin:   stdin,
+			stdout:  stdout,
+			stderr:  stderr,
+		}, nil
+	}
+
+	util.Info(i18n.T("tunnel_subsystem_creating", map[string]any{}))
+
+	proxySession, err := client.NewSession()
+	if err != nil {
+		cleanup(session, client)
+		return nil, util.NewError(util.ErrTypeSession, i18n.T("tunnel_session_failed", map[string]any{}), err)
+	}
+
+	if err = proxySession.RequestSubsystem(ProxySubsystem); err != nil {
+		cleanup(proxySession, session, client)
+		return nil, util.NewError(util.ErrTypeSubsystem,
+			i18n.T("ssh_subsystem_failed", map[string]any{"Subsystem": ProxySubsystem}), err)
+	}
+
+	proxyInput, err := proxySession.StdinPipe()
+	if err != nil {
+		cleanup(proxySession, session, client)
+		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("tunnel_stdin_failed", map[string]any{}), err)
+	}
+
+	proxyOutput, err := proxySession.StdoutPipe()
+	if err != nil {
+		cleanup(proxySession, session, client)
+		return nil, util.NewError(util.ErrTypeSubsystem, i18n.T("tunnel_stdout_failed", map[string]any{}), err)
+	}
+
+	util.Info(i18n.T("tunnel_subsystem_established", map[string]any{}))
+
 	return &Conn{
-		client:  client,
-		session: session,
-		stdin:   stdin,
-		stdout:  stdout,
-		stderr:  stderr,
+		client:       client,
+		session:      session,
+		stdin:        stdin,
+		stdout:       stdout,
+		stderr:       stderr,
+		proxySession: proxySession,
+		proxyInput:   proxyInput,
+		proxyOutput:  proxyOutput,
 	}, nil
 }
 func (c *Conn) Close() error {
@@ -156,9 +204,19 @@ func (c *Conn) Close() error {
 		c.stdin = nil
 	}
 
+	if c.proxyInput != nil {
+		_ = c.proxyInput.Close()
+		c.proxyInput = nil
+	}
+
 	if c.session != nil {
 		_ = c.session.Close()
 		c.session = nil
+	}
+
+	if c.proxySession != nil {
+		_ = c.proxySession.Close()
+		c.proxySession = nil
 	}
 
 	if c.client != nil {
@@ -186,7 +244,7 @@ func (c *Conn) SendPayload(payload any) error {
 	defer c.mu.Unlock()
 
 	if c.stdin == nil {
-		return util.NewError(util.ErrTypeConnection, i18n.T("connection_closed_payload", nil), nil)
+		return util.NewError(util.ErrTypeConnection, i18n.T("connection_closed_payload", map[string]any{}), nil)
 	}
 
 	data, err := json.Marshal(payload)
@@ -198,4 +256,38 @@ func (c *Conn) SendPayload(payload any) error {
 	_, err = c.stdin.Write(data)
 
 	return err
+}
+
+func (c *Conn) CheckHealth(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.client == nil || c.session == nil || c.stdin == nil {
+		return util.NewError(util.ErrTypeConnection, i18n.T("connection_closed", map[string]any{}), nil)
+	}
+
+	testSession, err := c.client.NewSession()
+	if err != nil {
+		// SSH connection is broken - most likely due to network issues
+		return util.NewError(util.ErrTypeConnection,
+			i18n.T("connection_health_check_failed", map[string]any{"Error": err}), err)
+	}
+
+	if testSession != nil {
+		_ = testSession.Close()
+	}
+
+	return nil
+}
+
+func (c *Conn) BinaryInput() io.WriteCloser {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.proxyInput // Will be nil if tunnel is disabled
+}
+
+func (c *Conn) BinaryOutput() io.Reader {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.proxyOutput // Will be nil if tunnel is disabled
 }

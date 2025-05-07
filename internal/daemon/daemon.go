@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -13,24 +12,25 @@ import (
 func WritePidFile() error {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return util.NewError(util.ErrTypeConfig, i18n.T("home_dir_error", nil), err)
+		return util.NewError(util.ErrTypeConfig, i18n.T("home_dir_error", map[string]any{}), err)
 	}
 
 	pidDir := filepath.Join(home, ".cortex_agent")
 	if err := os.MkdirAll(pidDir, 0755); err != nil {
-		return util.NewError(util.ErrTypeConfig, i18n.T("pid_dir_create_error", nil), err)
+		return util.NewError(util.ErrTypeConfig, i18n.T("pid_dir_create_error", map[string]any{}), err)
 	}
 
 	pidPath := filepath.Join(pidDir, "cortex_agent.pid")
 	pid := os.Getpid()
 
 	if err := os.WriteFile(pidPath, fmt.Appendf(nil, "%d", pid), 0644); err != nil {
-		return util.NewError(util.ErrTypeConfig, i18n.T("pid_file_write_error", nil), err)
+		return util.NewError(util.ErrTypeConfig, i18n.T("pid_file_write_error", map[string]any{}), err)
 	}
 
-	log.Printf("%s", i18n.T("pid_file_written", map[string]any{
+	util.Info(i18n.T("pid_file_written", map[string]any{
 		"Path": pidPath,
 		"PID":  pid,
 	}))
+
 	return nil
 }

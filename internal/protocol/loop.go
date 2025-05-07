@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -49,7 +48,7 @@ func RunMainLoop(ctx context.Context, conn transport.Connection, reconnectCh <-c
 	}
 
 	if err := g.Wait(); err != nil && !util.IsExpectedError(err) {
-		log.Printf("Error in main loop: %v", err)
+		util.LogError("Error in main loop", err)
 	}
 
 	return result
@@ -87,7 +86,7 @@ func readData(ctx context.Context, conn transport.Connection, errorCh chan<- err
 		}
 
 		if n > 0 {
-			log.Printf("Received %d bytes from transport", n)
+			util.Debug("Received bytes from transport", "bytes", n)
 		}
 	}
 }

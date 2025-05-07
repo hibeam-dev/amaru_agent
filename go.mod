@@ -7,9 +7,9 @@ require (
 	github.com/maniartech/signals v1.2.0
 	github.com/nicksnyder/go-i18n/v2 v2.6.0
 	go.uber.org/mock v0.5.1
-	golang.org/x/crypto v0.37.0
-	golang.org/x/sync v0.13.0
-	golang.org/x/text v0.24.0
+	golang.org/x/crypto v0.38.0
+	golang.org/x/sync v0.14.0
+	golang.org/x/text v0.25.0
 )
 
-require golang.org/x/sys v0.32.0 // indirect
+require golang.org/x/sys v0.33.0 // indirect

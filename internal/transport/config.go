@@ -14,4 +14,5 @@ type ApplicationConfig struct {
 	Port     int               `json:"port"`
 	Tags     map[string]string `json:"tags"`
 	Security map[string]bool   `json:"security"`
+	Tunnel   bool              `json:"tunnel"`
 }
