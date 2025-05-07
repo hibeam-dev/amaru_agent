@@ -3,6 +3,7 @@ package ssh
 import (
 	"bytes"
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -67,14 +68,86 @@ func TestConnectFailures(t *testing.T) {
 }
 
 func TestSendPayload(t *testing.T) {
-	t.Skip("Need to fix the implementation to make it more testable")
+	t.Run("SuccessfulSend", func(t *testing.T) {
+		mockStdin := &MockWriteCloser{Buffer: bytes.NewBuffer(nil)}
+
+		conn := &Conn{
+			stdin: mockStdin,
+		}
+
+		testPayload := map[string]string{"type": "test", "value": "data"}
+		err := conn.SendPayload(testPayload)
+
+		if err != nil {
+			t.Errorf("Expected no error, got: %v", err)
+		}
+
+		writtenData := mockStdin.String()
+
+		expected := `{"type":"test","value":"data"}` + "\n"
+		if writtenData != expected {
+			t.Errorf("Expected payload: %s, got: %s", expected, writtenData)
+		}
+	})
+
+	t.Run("MarshalError", func(t *testing.T) {
+		conn := &Conn{
+			stdin: &MockWriteCloser{Buffer: bytes.NewBuffer(nil)},
+		}
+
+		badPayload := map[string]any{"func": func() {}}
+		err := conn.SendPayload(badPayload)
+
+		if err == nil {
+			t.Errorf("Expected marshal error, got nil")
+		}
+	})
+
+	t.Run("ConnectionClosed", func(t *testing.T) {
+		conn := &Conn{
+			stdin: nil, // Simulate closed connection
+		}
+
+		err := conn.SendPayload(map[string]string{"type": "test"})
+
+		if err == nil {
+			t.Errorf("Expected closed connection error, got nil")
+		}
+	})
+
+	t.Run("WriteError", func(t *testing.T) {
+		expectedErr := io.ErrClosedPipe
+		mockStdin := &MockWriteCloser{
+			Buffer:   bytes.NewBuffer(nil),
+			writeErr: expectedErr,
+		}
+
+		conn := &Conn{
+			stdin: mockStdin,
+		}
+
+		err := conn.SendPayload(map[string]string{"type": "test"})
+
+		if err != expectedErr {
+			t.Errorf("Expected write error %v, got: %v", expectedErr, err)
+		}
+	})
 }
 
 type MockWriteCloser struct {
 	*bytes.Buffer
 	closeErr error
+	writeErr error
 }
 
 func (m *MockWriteCloser) Close() error {
 	return m.closeErr
+}
+
+func (m *MockWriteCloser) Write(p []byte) (n int, err error) {
+	if m.writeErr != nil {
+		return 0, m.writeErr
+	}
+
+	return m.Buffer.Write(p)
 }

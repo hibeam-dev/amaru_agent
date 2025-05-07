@@ -15,9 +15,6 @@ import (
 )
 
 const (
-	poolSize        = 5
-	connIdleTimeout = 60 * time.Second
-	connTimeout     = 5 * time.Second
 	initialReadWait = 5 * time.Second
 	bufferSize      = 32 * 1024 // Buffer size for data transfer (32KB)
 )
@@ -30,21 +27,13 @@ type ProxyService struct {
 
 	tunnelReadMu sync.Mutex
 
-	poolMu sync.Mutex
-	pool   []*pooledConnection
-}
-
-type pooledConnection struct {
-	conn     net.Conn
-	inUse    bool
-	lastUsed time.Time
+	connPool *ConnectionPool
 }
 
 func NewProxyService(bus *event.Bus) *ProxyService {
-	svc := &ProxyService{
-		pool: make([]*pooledConnection, poolSize),
-	}
+	svc := &ProxyService{}
 	svc.Service = NewService("proxy", bus)
+	svc.connPool = NewConnectionPool(svc.createLocalConnection)
 	return svc
 }
 
@@ -73,14 +62,7 @@ func (s *ProxyService) Stop(ctx context.Context) error {
 		s.cancelFunc = nil
 	}
 
-	s.poolMu.Lock()
-	for i, conn := range s.pool {
-		if conn != nil && conn.conn != nil {
-			_ = conn.conn.Close()
-			s.pool[i] = nil
-		}
-	}
-	s.poolMu.Unlock()
+	s.connPool.CleanupPool()
 
 	return s.Service.Stop(ctx)
 }
@@ -93,7 +75,7 @@ func (s *ProxyService) SetConfig(cfg config.Config) {
 
 	if oldCfg.Application.Port != cfg.Application.Port ||
 		oldCfg.Application.IP != cfg.Application.IP {
-		s.cleanupPool()
+		s.connPool.CleanupPool()
 	}
 }
 
@@ -101,18 +83,6 @@ func (s *ProxyService) GetConfig() config.Config {
 	s.connectionMu.RLock()
 	defer s.connectionMu.RUnlock()
 	return s.config
-}
-
-func (s *ProxyService) cleanupPool() {
-	s.poolMu.Lock()
-	defer s.poolMu.Unlock()
-
-	for i, conn := range s.pool {
-		if conn != nil && conn.conn != nil {
-			_ = conn.conn.Close()
-			s.pool[i] = nil
-		}
-	}
 }
 
 func (s *ProxyService) handleConfigEvent(evt event.Event) {
@@ -138,7 +108,7 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 			s.cancelFunc = nil
 		}
 
-		s.cleanupPool()
+		s.connPool.CleanupPool()
 	}
 }
 
@@ -170,7 +140,7 @@ func (s *ProxyService) startProxyMonitoring(ctx context.Context, conn transport.
 }
 
 func (s *ProxyService) poolMaintenance(ctx context.Context) {
-	s.cleanIdleConnections()
+	s.connPool.CleanIdleConnections()
 
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -180,37 +150,7 @@ func (s *ProxyService) poolMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.cleanIdleConnections()
-		}
-	}
-}
-
-func (s *ProxyService) cleanIdleConnections() {
-	s.poolMu.Lock()
-	defer s.poolMu.Unlock()
-
-	now := time.Now()
-
-	for i, pc := range s.pool {
-		if pc == nil {
-			continue
-		}
-
-		if pc.inUse {
-			continue
-		}
-
-		if pc.conn == nil {
-			if now.Sub(pc.lastUsed) > 10*time.Second {
-				s.pool[i] = nil
-			}
-			continue
-		}
-
-		// This ensures we don't keep HTTP/1.1 persistent connections around too long
-		if now.Sub(pc.lastUsed) > 5*time.Second {
-			_ = pc.conn.Close()
-			pc.conn = nil
+			s.connPool.CleanIdleConnections()
 		}
 	}
 }
@@ -259,11 +199,11 @@ func (s *ProxyService) proxyHandler(ctx context.Context, conn transport.Connecti
 }
 
 func (s *ProxyService) handleRequest(ctx context.Context, requestData []byte, tunnelInput io.Writer, reqNum int) {
-	conn, idx := s.getPoolConnection()
+	conn, idx := s.connPool.GetConnection(s.GetConfig())
 
 	defer func() {
-		if conn != nil {
-			s.releasePoolConnection(idx)
+		if conn != nil && idx >= 0 {
+			s.connPool.ReleaseConnection(idx)
 		}
 	}()
 
@@ -273,14 +213,14 @@ func (s *ProxyService) handleRequest(ctx context.Context, requestData []byte, tu
 
 	_, err := conn.Write(requestData)
 	if err != nil {
-		s.removePoolConnection(idx)
+		s.connPool.RemoveConnection(idx)
 		return
 	}
 
 	respBuffer := make([]byte, bufferSize)
 
 	if err := conn.SetReadDeadline(time.Now().Add(initialReadWait)); err != nil {
-		s.removePoolConnection(idx)
+		s.connPool.RemoveConnection(idx)
 		return
 	}
 
@@ -312,7 +252,7 @@ func (s *ProxyService) handleRequest(ctx context.Context, requestData []byte, tu
 
 				// After getting data, extend the read deadline for streaming data
 				if err := conn.SetReadDeadline(time.Now().Add(initialReadWait)); err != nil {
-					s.removePoolConnection(idx)
+					s.connPool.RemoveConnection(idx)
 					return
 				}
 
@@ -332,131 +272,15 @@ func (s *ProxyService) handleRequest(ctx context.Context, requestData []byte, tu
 					}
 
 					// Initial timeout with no data means server didn't respond
-					s.removePoolConnection(idx)
+					s.connPool.RemoveConnection(idx)
 					return
 				}
 
-				s.removePoolConnection(idx)
+				s.connPool.RemoveConnection(idx)
 				return
 			}
 		}
 	}
-}
-
-func (s *ProxyService) getPoolConnection() (net.Conn, int) {
-	s.poolMu.Lock()
-	defer s.poolMu.Unlock()
-
-	for i, pc := range s.pool {
-		if pc != nil && pc.conn == nil && !pc.inUse {
-			cfg := s.GetConfig()
-			conn, err := s.createLocalConnection(cfg)
-			if err != nil {
-				continue
-			}
-
-			pc.conn = conn
-			pc.inUse = true
-			pc.lastUsed = time.Now()
-			return conn, i
-		}
-	}
-
-	for i, pc := range s.pool {
-		if pc != nil && pc.conn != nil && !pc.inUse {
-			// We shouldn't hit this since we're closing connections after use
-			if isConnAlive(pc.conn) {
-				pc.inUse = true
-				return pc.conn, i
-			}
-
-			_ = pc.conn.Close()
-			pc.conn = nil
-		}
-	}
-
-	for i, pc := range s.pool {
-		if pc == nil {
-			cfg := s.GetConfig()
-			conn, err := s.createLocalConnection(cfg)
-			if err != nil {
-				return nil, -1
-			}
-
-			s.pool[i] = &pooledConnection{
-				conn:     conn,
-				inUse:    true,
-				lastUsed: time.Now(),
-			}
-			return conn, i
-		}
-	}
-
-	// Pool is full, create a one-off connection
-	cfg := s.GetConfig()
-	conn, err := s.createLocalConnection(cfg)
-	if err != nil {
-		return nil, -1
-	}
-
-	return conn, -1
-}
-
-func (s *ProxyService) releasePoolConnection(idx int) {
-	if idx < 0 {
-		return
-	}
-
-	s.poolMu.Lock()
-	defer s.poolMu.Unlock()
-
-	if idx >= len(s.pool) || s.pool[idx] == nil {
-		return
-	}
-
-	// Ensuring we don't reuse connections that might have buffered responses
-	if s.pool[idx].conn != nil {
-		_ = s.pool[idx].conn.Close()
-		s.pool[idx].conn = nil
-	}
-
-	s.pool[idx].inUse = false
-	s.pool[idx].lastUsed = time.Now()
-}
-
-func (s *ProxyService) removePoolConnection(idx int) {
-	if idx < 0 {
-		return
-	}
-
-	s.poolMu.Lock()
-	defer s.poolMu.Unlock()
-
-	if idx >= len(s.pool) || s.pool[idx] == nil {
-		return
-	}
-
-	if s.pool[idx].conn != nil {
-		_ = s.pool[idx].conn.Close()
-	}
-	s.pool[idx] = nil
-}
-
-func isConnAlive(conn net.Conn) bool {
-	if conn == nil {
-		return false
-	}
-
-	// Try to set a very short deadline
-	err := conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
-	if err != nil {
-		return false
-	}
-
-	defer func() { _ = conn.SetDeadline(time.Time{}) }()
-
-	_, err = conn.Write([]byte{})
-	return err == nil
 }
 
 func (s *ProxyService) createLocalConnection(cfg config.Config) (net.Conn, error) {

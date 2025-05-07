@@ -41,6 +41,34 @@ func (m *MockConnection) EXPECT() *MockConnectionMockRecorder {
 	return m.recorder
 }
 
+// BinaryInput mocks base method.
+func (m *MockConnection) BinaryInput() io.WriteCloser {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BinaryInput")
+	ret0, _ := ret[0].(io.WriteCloser)
+	return ret0
+}
+
+// BinaryInput indicates an expected call of BinaryInput.
+func (mr *MockConnectionMockRecorder) BinaryInput() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BinaryInput", reflect.TypeOf((*MockConnection)(nil).BinaryInput))
+}
+
+// BinaryOutput mocks base method.
+func (m *MockConnection) BinaryOutput() io.Reader {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BinaryOutput")
+	ret0, _ := ret[0].(io.Reader)
+	return ret0
+}
+
+// BinaryOutput indicates an expected call of BinaryOutput.
+func (mr *MockConnectionMockRecorder) BinaryOutput() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BinaryOutput", reflect.TypeOf((*MockConnection)(nil).BinaryOutput))
+}
+
 // CheckHealth mocks base method.
 func (m *MockConnection) CheckHealth(ctx context.Context) error {
 	m.ctrl.T.Helper()
