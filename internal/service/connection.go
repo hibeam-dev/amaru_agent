@@ -181,6 +181,7 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 		Application: transport.ApplicationConfig{
 			Hostname: cfg.Application.Hostname,
 			Port:     cfg.Application.Port,
+			IP:       cfg.Application.IP,
 			Tags:     cfg.Application.Tags,
 			Security: cfg.Application.Security,
 			Tunnel:   cfg.Connection.Tunnel,
