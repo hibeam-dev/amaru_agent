@@ -24,10 +24,12 @@ port = 2222
 user = "test-user"
 timeout = "45s"
 keyfile = "/path/to/key"
+tunnel = false
 
 [application]
 hostname = "test-app"
 port = 9090
+ip = "192.168.1.100"
 [application.tags]
 service = "test-service"
 environment = "test"
@@ -67,6 +69,9 @@ level = "debug"
 	}
 	if cfg.Application.Port != 9090 {
 		t.Errorf("Expected Application.Port to be 9090, got %d", cfg.Application.Port)
+	}
+	if cfg.Application.IP != "192.168.1.100" {
+		t.Errorf("Expected Application.IP to be '192.168.1.100', got '%s'", cfg.Application.IP)
 	}
 	if cfg.Application.Tags["service"] != "test-service" {
 		t.Errorf("Expected Agent.Tags['service'] to be 'test-service', got '%s'", cfg.Application.Tags["service"])

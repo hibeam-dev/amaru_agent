@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewApp(t *testing.T) {
-	app := NewApp("test-config.toml", true)
+	app := NewApp("test-config.toml")
 
 	if app == nil {
 		t.Fatal("Expected app to be non-nil")
@@ -22,9 +22,5 @@ func TestNewApp(t *testing.T) {
 		if component == nil {
 			t.Errorf("Expected %s to be non-nil", name)
 		}
-	}
-
-	if !app.connectionService.IsJSONMode() {
-		t.Error("Expected connection service to be in JSON mode")
 	}
 }

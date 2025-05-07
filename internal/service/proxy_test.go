@@ -8,10 +8,10 @@ import (
 	"erlang-solutions.com/cortex_agent/internal/event"
 )
 
-func TestConnectionService(t *testing.T) {
+func TestProxyService(t *testing.T) {
 	t.Run("BasicServiceFunctionality", func(t *testing.T) {
 		bus := event.NewBus()
-		svc := NewConnectionService(bus)
+		svc := NewProxyService(bus)
 
 		ctx := context.Background()
 
@@ -24,19 +24,24 @@ func TestConnectionService(t *testing.T) {
 		}
 	})
 
-	t.Run("TunnelConfiguration", func(t *testing.T) {
+	t.Run("ConfigManagement", func(t *testing.T) {
 		bus := event.NewBus()
-		svc := NewConnectionService(bus)
+		svc := NewProxyService(bus)
 
 		var cfg config.Config
-		cfg.Connection.Tunnel = true
+		cfg.Application.Port = 8080
+		cfg.Application.IP = "127.0.0.1"
 		cfg.Application.Security = map[string]bool{"tls": true}
 
 		svc.SetConfig(cfg)
 
 		retrievedCfg := svc.GetConfig()
-		if !retrievedCfg.Connection.Tunnel {
-			t.Error("Tunnel flag should be true in the config")
+		if retrievedCfg.Application.Port != 8080 {
+			t.Errorf("Port should be 8080, got %d", retrievedCfg.Application.Port)
+		}
+
+		if retrievedCfg.Application.IP != "127.0.0.1" {
+			t.Errorf("IP should be 127.0.0.1, got %s", retrievedCfg.Application.IP)
 		}
 
 		if !retrievedCfg.Application.Security["tls"] {

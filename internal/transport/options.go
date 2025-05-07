@@ -11,6 +11,7 @@ type ConnectionOptions struct {
 	User     string
 	KeyFile  string
 	Timeout  time.Duration
+	Tunnel   bool
 }
 
 type Option func(*ConnectionOptions)
@@ -51,10 +52,17 @@ func WithTimeout(timeout time.Duration) Option {
 	}
 }
 
+func WithTunnel(enabled bool) Option {
+	return func(o *ConnectionOptions) {
+		o.Tunnel = enabled
+	}
+}
+
 func DefaultOptions() ConnectionOptions {
 	return ConnectionOptions{
 		Protocol: DefaultProtocol,
 		Timeout:  30 * time.Second,
+		Tunnel:   false,
 	}
 }
 

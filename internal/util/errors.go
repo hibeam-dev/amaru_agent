@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"syscall"
@@ -17,6 +18,7 @@ const (
 	ErrTypeConnection ErrorType = "connection"
 	ErrTypeSession    ErrorType = "session"
 	ErrTypeSubsystem  ErrorType = "subsystem"
+	ErrTypeService    ErrorType = "service"
 )
 
 type AppError struct {
@@ -31,6 +33,25 @@ func (e *AppError) Error() string {
 
 func (e *AppError) Unwrap() error {
 	return e.Cause
+}
+
+func (e *AppError) LogValue() slog.Value {
+	attrs := []slog.Attr{
+		slog.String("error_type", string(e.Type)),
+		slog.String("error_message", e.Message),
+	}
+
+	if e.Cause != nil {
+		attrs = append(attrs, slog.String("cause", e.Cause.Error()))
+
+		// If cause is also an AppError, get its type
+		var appErr *AppError
+		if errors.As(e.Cause, &appErr) {
+			attrs = append(attrs, slog.String("cause_type", string(appErr.Type)))
+		}
+	}
+
+	return slog.GroupValue(attrs...)
 }
 
 var (
@@ -82,5 +103,18 @@ func WrapWithBase(base error, msg string, err error) error {
 }
 
 func WrapError(msg string, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var appErr *AppError
+	if errors.As(err, &appErr) {
+		return &AppError{
+			Type:    appErr.Type,
+			Message: msg,
+			Cause:   appErr,
+		}
+	}
+
 	return fmt.Errorf("%s: %w", msg, err)
 }

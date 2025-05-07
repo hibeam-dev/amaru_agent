@@ -18,8 +18,23 @@ other = "Error al enviar latido: {{.Error}}"
 [reconnecting]
 other = "Reconectando debido al cambio de configuración..."
 
-[json_mode_error]
-other = "Error en modo JSON: {{.Error}}"
+[connection_reconnecting]
+other = "Conexión perdida. Reconectando en {{.Delay}}..."
+
+[attempting_reconnection]
+other = "Intentando reconectar con el servidor cortex {{.Host}}:{{.Port}}..."
+
+[reconnection_failed]
+other = "Reconexión fallida: {{.Error}}. Se volverá a intentar en {{.Delay}}."
+
+[reconnection_successful]
+other = "Reconexión exitosa."
+
+[immediate_reconnect_failed] 
+other = "Reconexión inmediata fallida: {{.Error}}"
+
+[immediate_reconnect_successful]
+other = "Reconexión inmediata exitosa."
 
 [main_loop_error]
 other = "Error en el bucle principal: {{.Error}}"
@@ -80,8 +95,6 @@ other = "Configuración actualizada con éxito."
 [config_sent]
 other = "Configuración enviada al servidor cortex con éxito."
 
-# JSON protocol
-
 [connection_closed]
 other = "Conexión cerrada normalmente"
 
@@ -90,21 +103,6 @@ other = "Error de conexión: {{.Error}}"
 
 [reconnection_requested]
 other = "Reconexión solicitada"
-
-[decode_error]
-other = "Error al decodificar la respuesta del servidor: {{.Error}}"
-
-[server_response]
-other = "Respuesta recibida del servidor: {{.Response}}"
-
-[json_shutdown]
-other = "Contexto cancelado, apagando modo JSON..."
-
-[response_no_writer]
-other = "Respuesta recibida (sin escritor de salida): {{.Response}}"
-
-[response_timeout]
-other = "Tiempo de espera agotado para la respuesta"
 
 # SSH connection
 [ssh_connect_failed]
@@ -147,6 +145,93 @@ other = "Error al cerrar el cliente: {{.Error}}"
 [connection_closed_payload]
 other = "La conexión está cerrada, no se pueden enviar datos"
 
+[connection_health_check_failed]
+other = "Verificación de salud de conexión fallida: {{.Error}}"
+
+[connection_health_check_timeout]
+other = "Tiempo de espera agotado para verificación de salud de conexión"
+
+[tunnel_connection_error]
+other = "Error al establecer conexión de túnel a {{.Address}}: {{.Error}}"
+
+[tunnel_no_ssh_connection]
+other = "No se puede establecer el túnel, la conexión al servidor cortex no está disponible"
+
+[tunnel_connecting]
+other = "Estableciendo conexión de túnel a {{.Address}} (TLS: {{.UseTLS}})..."
+
+[tunnel_connection_established]
+other = "Conexión de túnel establecida con éxito"
+
+[tunnel_connection_closing]
+other = "Cerrando conexión de túnel"
+
+[tunnel_connection_close_error]
+other = "Error al cerrar la conexión de túnel: {{.Error}}"
+
+[tunnel_data_error]
+other = "Error en la transferencia de datos del túnel: {{.Error}}"
+
+[tunnel_read_from_ssh_error]
+other = "Error al leer datos de SSH: {{.Error}}"
+
+[tunnel_write_to_local_error]
+other = "Error al escribir datos a la aplicación local: {{.Error}}"
+
+[tunnel_read_from_local_error]
+other = "Error al leer datos de la aplicación local: {{.Error}}"
+
+[tunnel_write_to_ssh_error]
+other = "Error al escribir datos a SSH: {{.Error}}"
+
+[tunnel_shutdown]
+other = "Conexión de túnel apagándose"
+
+[tunnel_health_check_failed]
+other = "Verificación de salud del túnel fallida"
+
+[tunnel_attempting_reconnection]
+other = "Intentando reconectar el túnel..."
+
+[tunnel_reconnection_failed]
+other = "Reconexión del túnel fallida: {{.Error}}. Se volverá a intentar en {{.Delay}}."
+
+[tunnel_reconnection_successful]
+other = "Reconexión del túnel exitosa."
+
+[tunnel_immediate_reconnect_failed]
+other = "Reconexión inmediata del túnel fallida: {{.Error}}"
+
+[tunnel_immediate_reconnect_successful]
+other = "Reconexión inmediata del túnel exitosa."
+
+[tunnel_subsystem_creating]
+other = "Creando subsistema de túnel..."
+
+[tunnel_session_failed]
+other = "Error al crear sesión de túnel"
+
+[tunnel_stdin_failed]
+other = "Error al obtener canal de entrada del túnel"
+
+[tunnel_stdout_failed]
+other = "Error al obtener canal de salida del túnel"
+
+[tunnel_subsystem_established]
+other = "Subsistema de túnel establecido correctamente"
+
+[tunnel_reconnection_needed]
+other = "Conexión de túnel necesita reconexión: {{.Error}}"
+
+[tunnel_auto_reconnect_starting]
+other = "Iniciando reconexión automática del túnel..."
+
+[tunnel_auto_reconnect_failed]
+other = "Reconexión automática del túnel fallida: {{.Error}}"
+
+[tunnel_auto_reconnect_successful]
+other = "Reconexión automática del túnel exitosa."
+
 [marshal_payload_error]
 other = "Error al serializar los datos: {{.Error}}"
 
@@ -172,7 +257,6 @@ other = "Conexión fallida"
 [app_termination_signal]
 other = "Señal de terminación recibida, apagando la aplicación"
 
-
 [service_stop_error]
 other = "Error al detener el servicio de {{.Service}}: {{.Error}}"
 
@@ -185,9 +269,6 @@ other = "Uso: cortex_agent [opciones]"
 
 [options_header]
 other = "Opciones:"
-
-[flag_json_desc]
-other = "Habilitar el modo de comunicación JSON para la integración de aplicaciones"
 
 [flag_pid_desc]
 other = "Escribir archivo PID en ~/.cortex_agent/cortex_agent.pid"

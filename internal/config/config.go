@@ -16,10 +16,12 @@ type Config struct {
 		Timeout    time.Duration
 		KeyFile    string
 		KnownHosts string `toml:",omitempty"`
+		Tunnel     bool
 	}
 	Application struct {
 		Hostname string
 		Port     int
+		IP       string `toml:",omitempty"`
 		Tags     map[string]string
 		Security map[string]bool
 	}
@@ -40,15 +42,14 @@ func Load(path string) (Config, error) {
 		return config, util.WrapWithBase(util.ErrConfigLoad, "failed to parse config file", err)
 	}
 
-	// Validate essential config fields
 	if config.Connection.Host == "" {
-		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_host_missing", nil), nil)
+		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_host_missing", map[string]any{}), nil)
 	}
 	if config.Connection.User == "" {
-		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_user_missing", nil), nil)
+		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_user_missing", map[string]any{}), nil)
 	}
 	if config.Connection.KeyFile == "" {
-		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_keyfile_missing", nil), nil)
+		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_keyfile_missing", map[string]any{}), nil)
 	}
 
 	return config, nil

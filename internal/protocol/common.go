@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"erlang-solutions.com/cortex_agent/internal/i18n"
@@ -25,8 +24,7 @@ func readStderr(ctx context.Context, conn transport.Connection) {
 			}
 
 			if n > 0 {
-				// Log actual stderr content for debugging
-				log.Printf("stderr: %s", string(buffer[:n]))
+				util.Debug("stderr output", "message", string(buffer[:n]))
 			}
 		}
 	}

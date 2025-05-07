@@ -12,6 +12,8 @@ const (
 	ReconnectRequested    = "reconnect_requested"
 	TerminationSignal     = "termination_signal"
 	SIGHUPReceived        = "sighup_received"
+	ProxyEstablished      = "proxy_established"
+	ProxyFailed           = "proxy_failed"
 )
 
 type Event struct {
