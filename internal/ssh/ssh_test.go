@@ -55,7 +55,6 @@ func TestConnectFailures(t *testing.T) {
 	cfg := config.Config{}
 	cfg.Connection.Host = "localhost"
 	cfg.Connection.Port = 22
-	cfg.Connection.User = "testuser"
 	cfg.Connection.KeyFile = "/does/not/exist/key.file"
 	cfg.Connection.Timeout = 1 * time.Second
 

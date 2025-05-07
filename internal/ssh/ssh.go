@@ -19,6 +19,7 @@ import (
 const (
 	Subsystem      = "cortex"
 	ProxySubsystem = "proxy"
+	User           = "agent"
 )
 
 var _ transport.Connection = (*Conn)(nil)
@@ -42,7 +43,6 @@ func (c *sshCreator) CreateConnection(ctx context.Context, config config.Config,
 		Protocol: "ssh",
 		Host:     config.Connection.Host,
 		Port:     config.Connection.Port,
-		User:     config.Connection.User,
 		KeyFile:  config.Connection.KeyFile,
 		Timeout:  config.Connection.Timeout,
 		Tunnel:   config.Connection.Tunnel,
@@ -54,9 +54,6 @@ func (c *sshCreator) CreateConnection(ctx context.Context, config config.Config,
 	}
 	if opts.Port > 0 {
 		connectionOpts.Port = opts.Port
-	}
-	if opts.User != "" {
-		connectionOpts.User = opts.User
 	}
 	if opts.KeyFile != "" {
 		connectionOpts.KeyFile = opts.KeyFile
@@ -86,7 +83,7 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 	}
 
 	sshConfig := &ssh.ClientConfig{
-		User:            opts.User,
+		User:            User,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		Timeout:         opts.Timeout,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Use known_hosts file

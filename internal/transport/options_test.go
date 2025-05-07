@@ -34,17 +34,6 @@ func TestWithPort(t *testing.T) {
 		t.Errorf("Expected port to be 8080, got %d", opts.Port)
 	}
 }
-
-func TestWithUser(t *testing.T) {
-	opt := WithUser("testuser")
-	opts := DefaultOptions()
-	opt(&opts)
-
-	if opts.User != "testuser" {
-		t.Errorf("Expected user to be 'testuser', got '%s'", opts.User)
-	}
-}
-
 func TestWithKeyFile(t *testing.T) {
 	opt := WithKeyFile("/path/to/key.pem")
 	opts := DefaultOptions()
@@ -97,7 +86,6 @@ func TestApplyOptions(t *testing.T) {
 		WithProtocol("custom"),
 		WithHost("example.com"),
 		WithPort(8080),
-		WithUser("testuser"),
 		WithKeyFile("/path/to/key.pem"),
 		WithTimeout(10*time.Second),
 		WithTunnel(true),
@@ -113,10 +101,6 @@ func TestApplyOptions(t *testing.T) {
 
 	if opts.Port != 8080 {
 		t.Errorf("Expected port to be 8080, got %d", opts.Port)
-	}
-
-	if opts.User != "testuser" {
-		t.Errorf("Expected user to be 'testuser', got '%s'", opts.User)
 	}
 
 	if opts.KeyFile != "/path/to/key.pem" {

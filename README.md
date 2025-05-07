@@ -110,7 +110,6 @@ nohup ./bin/cortex_agent -pid > /dev/null 2>&1 &
 [connection]
 host = "localhost"       # Server hostname
 port = 22000             # Server port
-user = "agent"           # Username
 timeout = "30s"          # Connection timeout
 keyfile = "/path/to/key" # Private key path
 tunnel = true            # Enable TCP tunneling

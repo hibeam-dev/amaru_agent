@@ -21,7 +21,6 @@ func TestLoadConfig(t *testing.T) {
 [connection]
 host = "test-host"
 port = 2222
-user = "test-user"
 timeout = "45s"
 keyfile = "/path/to/key"
 tunnel = false
@@ -57,10 +56,9 @@ level = "debug"
 	if cfg.Connection.Port != 2222 {
 		t.Errorf("Expected Connection.Port to be 2222, got %d", cfg.Connection.Port)
 	}
-	if cfg.Connection.User != "test-user" {
-		t.Errorf("Expected Connection.User to be 'test-user', got '%s'", cfg.Connection.User)
-	}
+
 	expectedTimeout := 45 * time.Second
+
 	if cfg.Connection.Timeout != expectedTimeout {
 		t.Errorf("Expected Connection.Timeout to be %v, got %v", expectedTimeout, cfg.Connection.Timeout)
 	}

@@ -8,7 +8,6 @@ type ConnectionOptions struct {
 	Protocol string
 	Host     string
 	Port     int
-	User     string
 	KeyFile  string
 	Timeout  time.Duration
 	Tunnel   bool
@@ -33,13 +32,6 @@ func WithPort(port int) Option {
 		o.Port = port
 	}
 }
-
-func WithUser(user string) Option {
-	return func(o *ConnectionOptions) {
-		o.User = user
-	}
-}
-
 func WithKeyFile(keyFile string) Option {
 	return func(o *ConnectionOptions) {
 		o.KeyFile = keyFile
