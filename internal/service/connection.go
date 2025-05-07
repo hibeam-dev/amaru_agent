@@ -66,7 +66,6 @@ func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) erro
 		transport.WithProtocol(transport.DefaultProtocol),
 		transport.WithHost(cfg.Connection.Host),
 		transport.WithPort(cfg.Connection.Port),
-		transport.WithUser(cfg.Connection.User),
 		transport.WithKeyFile(cfg.Connection.KeyFile),
 		transport.WithTimeout(cfg.Connection.Timeout),
 		transport.WithTunnel(cfg.Connection.Tunnel),

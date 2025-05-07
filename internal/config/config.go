@@ -12,7 +12,6 @@ type Config struct {
 	Connection struct {
 		Host       string
 		Port       int
-		User       string
 		Timeout    time.Duration
 		KeyFile    string
 		KnownHosts string `toml:",omitempty"`
@@ -44,9 +43,6 @@ func Load(path string) (Config, error) {
 
 	if config.Connection.Host == "" {
 		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_host_missing", map[string]any{}), nil)
-	}
-	if config.Connection.User == "" {
-		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_user_missing", map[string]any{}), nil)
 	}
 	if config.Connection.KeyFile == "" {
 		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_keyfile_missing", map[string]any{}), nil)
