@@ -291,3 +291,79 @@ other = "Connection user not specified"
 
 [connection_keyfile_missing]
 other = "Connection key file not specified"
+
+# Proxy and connection pool messages
+[proxy_backend_connecting]
+other = "Connecting to backend server at {{.Address}}..."
+
+[proxy_backend_connection_established]
+other = "Backend TLS connection established to {{.Address}}"
+
+[proxy_backend_connection_failed]
+other = "Failed to connect to backend server at {{.Address}}: {{.Error}}"
+
+[proxy_backend_connection_closing]
+other = "Closing backend connection {{.Index}}"
+
+[proxy_backend_connection_replacement_failed]
+other = "Failed to replace backend connection {{.Index}}: {{.Error}}"
+
+[proxy_backend_connections_closing]
+other = "Closing {{.Count}} backend connections"
+
+[proxy_local_connecting]
+other = "Connecting to local application at {{.Address}} (TLS: {{.TLS}})"
+
+[proxy_local_connection_established]
+other = "Local connection established to {{.Address}} (TLS: {{.TLS}})"
+
+[proxy_local_connection_failed]
+other = "Failed to connect to local application at {{.Address}} (TLS: {{.TLS}}): {{.Error}}"
+
+[pool_reusing_slot]
+other = "Reusing pool slot {{.Index}}"
+
+[pool_connection_created]
+other = "Connection created in pool slot {{.Index}}"
+
+[pool_connection_creation_failed]
+other = "Failed to create connection for pool slot {{.Index}}: {{.Error}}"
+
+[pool_connection_reused]
+other = "Reusing existing connection from pool slot {{.Index}}"
+
+[pool_connection_dead]
+other = "Connection in pool slot {{.Index}} is dead, closing"
+
+[pool_using_empty_slot]
+other = "Using empty pool slot {{.Index}}"
+
+[pool_full_creating_oneoff]
+other = "Pool is full, creating one-off connection"
+
+[pool_oneoff_creation_failed]
+other = "Failed to create one-off connection: {{.Error}}"
+
+[pool_oneoff_connection_created]
+other = "One-off connection created successfully"
+
+[pool_connection_releasing]
+other = "Releasing connection from pool slot {{.Index}}"
+
+[pool_cleanup_starting]
+other = "Starting connection pool cleanup ({{.Count}} slots)"
+
+[pool_connection_closing]
+other = "Closing connection in pool slot {{.Index}}"
+
+[pool_cleanup_completed]
+other = "Connection pool cleanup completed"
+
+[pool_slot_cleaned]
+other = "Cleaned empty pool slot {{.Index}}"
+
+[pool_idle_connection_closing]
+other = "Closing idle connection in pool slot {{.Index}}"
+
+[pool_idle_cleanup_completed]
+other = "Idle connection cleanup completed ({{.Cleaned}} connections cleaned)"

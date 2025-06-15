@@ -87,6 +87,7 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 
 	addr := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
 	util.Info(i18n.T("ssh_dialing", map[string]any{
+		"type": "ssh",
 		"Host": opts.Host,
 		"Port": opts.Port,
 	}))
@@ -97,7 +98,9 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 			i18n.T("ssh_connect_failed", map[string]any{"Address": addr}), err)
 	}
 
-	util.Info(i18n.T("ssh_connection_established", map[string]any{}))
+	util.Info(i18n.T("ssh_connection_established", map[string]any{
+		"type": "ssh",
+	}))
 
 	cleanup := func(closables ...io.Closer) {
 		for _, c := range closables {
