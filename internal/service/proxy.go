@@ -10,7 +10,9 @@ import (
 
 	"erlang-solutions.com/amaru_agent/internal/config"
 	"erlang-solutions.com/amaru_agent/internal/event"
+	"erlang-solutions.com/amaru_agent/internal/i18n"
 	"erlang-solutions.com/amaru_agent/internal/transport"
+	"erlang-solutions.com/amaru_agent/internal/util"
 )
 
 type ProxyService struct {
@@ -188,6 +190,11 @@ func (s *ProxyService) createBackendConnection() (net.Conn, error) {
 	cfg := s.GetConfig()
 	backendAddr := net.JoinHostPort(cfg.Connection.Host, "9090")
 
+	util.Info(i18n.T("proxy_backend_connecting", map[string]any{
+		"type":    "proxy",
+		"Address": backendAddr,
+	}))
+
 	dialer := &net.Dialer{
 		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
@@ -197,8 +204,18 @@ func (s *ProxyService) createBackendConnection() (net.Conn, error) {
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
+		util.Warn(i18n.T("proxy_backend_connection_failed", map[string]any{
+			"type":    "proxy",
+			"Address": backendAddr,
+			"Error":   err,
+		}))
 		return nil, err
 	}
+
+	util.Info(i18n.T("proxy_backend_connection_established", map[string]any{
+		"type":    "proxy",
+		"Address": backendAddr,
+	}))
 
 	if tcpConn, ok := tlsConn.NetConn().(*net.TCPConn); ok {
 		_ = tcpConn.SetKeepAlive(true)
@@ -228,12 +245,21 @@ func (s *ProxyService) maintainBackendConnections(ctx context.Context) {
 	for i, conn := range s.backendConns {
 		if conn == nil || s.isConnectionBroken(conn) {
 			if conn != nil {
+				util.Debug(i18n.T("proxy_backend_connection_closing", map[string]any{
+					"type":  "proxy",
+					"Index": i,
+				}))
 				_ = conn.Close()
 			}
 			newConn, err := s.createBackendConnection()
 			if err == nil {
 				s.backendConns[i] = newConn
 			} else {
+				util.Warn(i18n.T("proxy_backend_connection_replacement_failed", map[string]any{
+					"type":  "proxy",
+					"Index": i,
+					"Error": err,
+				}))
 				s.backendConns[i] = nil
 			}
 		}
@@ -266,8 +292,17 @@ func (s *ProxyService) closeBackendConnections() {
 	s.backendConnsMu.Lock()
 	defer s.backendConnsMu.Unlock()
 
-	for _, conn := range s.backendConns {
+	util.Info(i18n.T("proxy_backend_connections_closing", map[string]any{
+		"type":  "proxy",
+		"Count": len(s.backendConns),
+	}))
+
+	for i, conn := range s.backendConns {
 		if conn != nil {
+			util.Debug(i18n.T("proxy_backend_connection_closing", map[string]any{
+				"type":  "proxy",
+				"Index": i,
+			}))
 			_ = conn.Close()
 		}
 	}
@@ -287,14 +322,42 @@ func (s *ProxyService) createLocalConnection(cfg config.Config) (net.Conn, error
 
 	localAddr := net.JoinHostPort(ip, fmt.Sprintf("%d", cfg.Application.Port))
 
+	util.Debug(i18n.T("proxy_local_connecting", map[string]any{
+		"type":    "proxy",
+		"Address": localAddr,
+		"TLS":     useTLS,
+	}))
+
 	dialer := &net.Dialer{
 		Timeout: connTimeout,
 	}
 
+	var conn net.Conn
+	var err error
+
 	if useTLS {
-		return tls.DialWithDialer(dialer, "tcp", localAddr, &tls.Config{
+		conn, err = tls.DialWithDialer(dialer, "tcp", localAddr, &tls.Config{
 			InsecureSkipVerify: true, // This is a local connection
 		})
+	} else {
+		conn, err = dialer.Dial("tcp", localAddr)
 	}
-	return dialer.Dial("tcp", localAddr)
+
+	if err != nil {
+		util.Warn(i18n.T("proxy_local_connection_failed", map[string]any{
+			"type":    "proxy",
+			"Address": localAddr,
+			"TLS":     useTLS,
+			"Error":   err,
+		}))
+		return nil, err
+	}
+
+	util.Debug(i18n.T("proxy_local_connection_established", map[string]any{
+		"type":    "proxy",
+		"Address": localAddr,
+		"TLS":     useTLS,
+	}))
+
+	return conn, nil
 }

@@ -138,6 +138,7 @@ func (a *App) stopServices(ctx context.Context) {
 		if err := s.svc.Stop(stopCtx); err != nil {
 			util.LogError(i18n.T("service_stop_error", map[string]any{
 				"Service": s.name,
+				"Error":   err,
 			}), err)
 		}
 	}

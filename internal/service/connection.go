@@ -275,6 +275,7 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 				lastReconnectAttempt = now
 
 				util.Info(i18n.T("attempting_reconnection", map[string]any{
+					"type": "connection",
 					"Host": config.Connection.Host,
 					"Port": config.Connection.Port,
 				}))
@@ -286,11 +287,15 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 					}
 
 					util.LogError(i18n.T("reconnection_failed", map[string]any{
+						"type":  "connection",
+						"Error": err,
 						"Delay": reconnectDelay.String(),
 					}), err)
 				} else {
 					reconnectDelay = minReconnectDelay
-					util.Info(i18n.T("reconnection_successful", map[string]any{}))
+					util.Info(i18n.T("reconnection_successful", map[string]any{
+						"type": "connection",
+					}))
 				}
 				continue
 			}
@@ -304,7 +309,10 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 			cancel()
 
 			if err != nil {
-				util.LogError(i18n.T("connection_health_check_failed", map[string]any{}), err)
+				util.LogError(i18n.T("connection_health_check_failed", map[string]any{
+					"type":  "connection",
+					"Error": err,
+				}), err)
 
 				_ = s.closeConnection(ctx)
 
@@ -312,9 +320,14 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 				reconnectDelay = minReconnectDelay
 
 				if err := s.Connect(ctx, config); err != nil {
-					util.LogError(i18n.T("immediate_reconnect_failed", map[string]any{}), err)
+					util.LogError(i18n.T("immediate_reconnect_failed", map[string]any{
+						"type":  "connection",
+						"Error": err,
+					}), err)
 				} else {
-					util.Info(i18n.T("immediate_reconnect_successful", map[string]any{}))
+					util.Info(i18n.T("immediate_reconnect_successful", map[string]any{
+						"type": "connection",
+					}))
 				}
 			}
 		}
