@@ -1,7 +1,7 @@
 package registry
 
 import (
-	_ "erlang-solutions.com/cortex_agent/internal/ssh"
+	_ "erlang-solutions.com/amaru_agent/internal/ssh"
 )
 
 func InitTransports() {

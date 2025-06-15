@@ -21,4 +21,4 @@ mtls = false
 
 [logging]
 level = "info"
-logfile = "/Users/ricardolanziano/cortex_agent.log"
+logfile = "/Users/ricardolanziano/amaru_agent.log"

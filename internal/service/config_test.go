@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"erlang-solutions.com/cortex_agent/internal/config"
-	"erlang-solutions.com/cortex_agent/internal/event"
+	"erlang-solutions.com/amaru_agent/internal/config"
+	"erlang-solutions.com/amaru_agent/internal/event"
 )
 
 const testConfigContent = `

@@ -22,7 +22,7 @@ other = "Reconectando debido al cambio de configuración..."
 other = "Conexión perdida. Reconectando en {{.Delay}}..."
 
 [attempting_reconnection]
-other = "Intentando reconectar con el servidor cortex {{.Host}}:{{.Port}}..."
+other = "Intentando reconectar con el servidor amaru {{.Host}}:{{.Port}}..."
 
 [reconnection_failed]
 other = "Reconexión fallida: {{.Error}}. Se volverá a intentar en {{.Delay}}."
@@ -43,10 +43,10 @@ other = "Error en el bucle principal: {{.Error}}"
 other = "Error al cargar la clave de autenticación: {{.Error}}"
 
 [ssh_dialing]
-other = "Conectando con el servidor cortex {{.Host}}:{{.Port}}..."
+other = "Conectando con el servidor amaru {{.Host}}:{{.Port}}..."
 
 [ssh_connection_established]
-other = "Conexión con el servidor cortex establecida"
+other = "Conexión con el servidor amaru establecida"
 
 # Main application messages
 [i18n_init_error]
@@ -93,7 +93,7 @@ other = "Error al actualizar la configuración: {{.Error}}. Se reconectará en s
 other = "Configuración actualizada con éxito."
 
 [config_sent]
-other = "Configuración enviada al servidor cortex con éxito."
+other = "Configuración enviada al servidor amaru con éxito."
 
 [connection_closed]
 other = "Conexión cerrada normalmente"
@@ -155,7 +155,7 @@ other = "Tiempo de espera agotado para verificación de salud de conexión"
 other = "Error al establecer conexión de túnel a {{.Address}}: {{.Error}}"
 
 [tunnel_no_ssh_connection]
-other = "No se puede establecer el túnel, la conexión al servidor cortex no está disponible"
+other = "No se puede establecer el túnel, la conexión al servidor amaru no está disponible"
 
 [tunnel_connecting]
 other = "Estableciendo conexión de túnel a {{.Address}} (TLS: {{.UseTLS}})..."
@@ -262,16 +262,16 @@ other = "Error al detener el servicio de {{.Service}}: {{.Error}}"
 
 # Command-line flags and usage
 [usage_header]
-other = "Cortex Agent - Gestor de proxy remoto"
+other = "Amaru Agent - Gestor de proxy remoto"
 
 [usage_format]
-other = "Uso: cortex_agent [opciones]"
+other = "Uso: amaru_agent [opciones]"
 
 [options_header]
 other = "Opciones:"
 
 [flag_pid_desc]
-other = "Escribir archivo PID en ~/.cortex_agent/cortex_agent.pid"
+other = "Escribir archivo PID en ~/.amaru_agent/amaru_agent.pid"
 
 [flag_config_desc]
 other = "Ruta al archivo de configuración TOML (predeterminado: config.toml)"

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"erlang-solutions.com/cortex_agent/internal/config"
-	"erlang-solutions.com/cortex_agent/internal/transport"
+	"erlang-solutions.com/amaru_agent/internal/config"
+	"erlang-solutions.com/amaru_agent/internal/transport"
 )
 
 func TestConnClose(t *testing.T) {

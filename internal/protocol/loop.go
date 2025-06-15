@@ -6,9 +6,9 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"erlang-solutions.com/cortex_agent/internal/i18n"
-	"erlang-solutions.com/cortex_agent/internal/transport"
-	"erlang-solutions.com/cortex_agent/internal/util"
+	"erlang-solutions.com/amaru_agent/internal/i18n"
+	"erlang-solutions.com/amaru_agent/internal/transport"
+	"erlang-solutions.com/amaru_agent/internal/util"
 )
 
 func RunMainLoop(ctx context.Context, conn transport.Connection, reconnectCh <-chan struct{}) error {

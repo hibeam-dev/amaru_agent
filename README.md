@@ -1,6 +1,6 @@
-# Cortex Agent
+# Amaru Agent
 
-Go reference implementation of the agent component for the Cortex reverse-TCP
+Go reference implementation of the agent component for the Amaru reverse-TCP
 proxy system.
 
 ## Features
@@ -21,8 +21,8 @@ proxy system.
 ### Building from source
 
 ```bash
-git clone https://github.com/Erlang-Solutions/cortex_agent.git
-cd cortex_agent
+git clone https://github.com/Erlang-Solutions/amaru_agent.git
+cd amaru_agent
 make build
 ```
 
@@ -32,8 +32,8 @@ The binary will be available in the `bin/` directory.
 
 ```bash
 # Clone and setup
-git clone https://github.com/Erlang-Solutions/cortex_agent.git
-cd cortex_agent
+git clone https://github.com/Erlang-Solutions/amaru_agent.git
+cd amaru_agent
 go mod download
 
 # Install linter (recommended)
@@ -50,7 +50,7 @@ make test
 ### Project Structure
 
 ```
-├── cmd/cortex_agent/    # Main entry point
+├── cmd/amaru_agent/    # Main entry point
 ├── internal/            # Internal packages
 │   ├── app/             # Application core
 │   ├── config/          # Configuration
@@ -82,22 +82,22 @@ make clean  # Clean artifacts
 
 ```bash
 # Basic usage
-./bin/cortex_agent
+./bin/amaru_agent
 
 # With custom config
-./bin/cortex_agent -config=/path/to/config.toml
+./bin/amaru_agent -config=/path/to/config.toml
 
 # Use Spanish language
-LANG=es_ES.UTF-8 ./bin/cortex_agent
+LANG=es_ES.UTF-8 ./bin/amaru_agent
 
 # Run in background
-nohup ./bin/cortex_agent -pid > /dev/null 2>&1 &
+nohup ./bin/amaru_agent -pid > /dev/null 2>&1 &
 ```
 
 ### Command-line Options
 
 - `-config`: Config file path (default: config.toml)
-- `-pid`: Write PID to ~/.cortex_agent/cortex_agent.pid
+- `-pid`: Write PID to ~/.amaru_agent/amaru_agent.pid
 
 ### Signal Handling
 

@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"erlang-solutions.com/cortex_agent/internal/event"
+	"erlang-solutions.com/amaru_agent/internal/event"
 )
 
 const DefaultGracefulTimeout = 5 * time.Second

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"erlang-solutions.com/cortex_agent/internal/event"
+	"erlang-solutions.com/amaru_agent/internal/event"
 )
 
 type Service struct {

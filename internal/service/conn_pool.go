@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"erlang-solutions.com/cortex_agent/internal/config"
+	"erlang-solutions.com/amaru_agent/internal/config"
 )
 
 const (

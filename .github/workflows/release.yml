@@ -16,10 +16,10 @@ jobs:
       - name: Build binaries
         run: |
           mkdir -p dist
-          GOOS=linux GOARCH=amd64 go build -o dist/cortex_agent_linux_amd64 ./cmd/cortex_agent
-          GOOS=darwin GOARCH=amd64 go build -o dist/cortex_agent_darwin_amd64 ./cmd/cortex_agent
-          GOOS=darwin GOARCH=arm64 go build -o dist/cortex_agent_darwin_arm64 ./cmd/cortex_agent
-          GOOS=windows GOARCH=amd64 go build -o dist/cortex_agent_windows_amd64.exe ./cmd/cortex_agent
+          GOOS=linux GOARCH=amd64 go build -o dist/amaru_agent_linux_amd64 ./cmd/amaru_agent
+          GOOS=darwin GOARCH=amd64 go build -o dist/amaru_agent_darwin_amd64 ./cmd/amaru_agent
+          GOOS=darwin GOARCH=arm64 go build -o dist/amaru_agent_darwin_arm64 ./cmd/amaru_agent
+          GOOS=windows GOARCH=amd64 go build -o dist/amaru_agent_windows_amd64.exe ./cmd/amaru_agent
       - name: Generate checksums
         run: |
           cd dist

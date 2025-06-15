@@ -22,7 +22,7 @@ other = "Reconnecting due to configuration change..."
 other = "Connection lost. Reconnecting in {{.Delay}}..."
 
 [attempting_reconnection]
-other = "Attempting to reconnect to cortex server at {{.Host}}:{{.Port}}..."
+other = "Attempting to reconnect to amaru server at {{.Host}}:{{.Port}}..."
 
 [reconnection_failed]
 other = "Reconnection failed: {{.Error}}. Will retry in {{.Delay}}."
@@ -43,10 +43,10 @@ other = "Main loop error: {{.Error}}"
 other = "Error loading authentication key: {{.Error}}"
 
 [ssh_dialing]
-other = "Connecting to cortex server at {{.Host}}:{{.Port}}..."
+other = "Connecting to amaru server at {{.Host}}:{{.Port}}..."
 
 [ssh_connection_established]
-other = "Connection to cortex server established"
+other = "Connection to amaru server established"
 
 # Main application messages
 [i18n_init_error]
@@ -93,7 +93,7 @@ other = "Failed to update configuration: {{.Error}}. Will reconnect instead."
 other = "Configuration updated successfully."
 
 [config_sent]
-other = "Configuration sent to cortex server successfully."
+other = "Configuration sent to amaru server successfully."
 
 [connection_closed]
 other = "Connection closed normally"
@@ -155,7 +155,7 @@ other = "Connection health check timed out"
 other = "Failed to establish tunnel connection to {{.Address}}: {{.Error}}"
 
 [tunnel_no_ssh_connection]
-other = "Cannot establish tunnel, connection to cortex server not available"
+other = "Cannot establish tunnel, connection to amaru server not available"
 
 [tunnel_connecting]
 other = "Establishing tunnel connection to {{.Address}} (TLS: {{.UseTLS}})..."
@@ -268,16 +268,16 @@ other = "Error stopping {{.Service}} service: {{.Error}}"
 
 # Command-line flags and usage
 [usage_header]
-other = "Cortex Agent - Remote proxy manager"
+other = "Amaru Agent - Remote proxy manager"
 
 [usage_format]
-other = "Usage: cortex_agent [options]"
+other = "Usage: amaru_agent [options]"
 
 [options_header]
 other = "Options:"
 
 [flag_pid_desc]
-other = "Write PID file to ~/.cortex_agent/cortex_agent.pid"
+other = "Write PID file to ~/.amaru_agent/amaru_agent.pid"
 
 [flag_config_desc]
 other = "Path to TOML configuration file (default: config.toml)"
