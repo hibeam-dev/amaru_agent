@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 	"time"
@@ -14,20 +13,14 @@ import (
 	"erlang-solutions.com/cortex_agent/internal/transport"
 )
 
-const (
-	initialReadWait = 5 * time.Second
-	bufferSize      = 32 * 1024 // Buffer size for data transfer (32KB)
-)
-
 type ProxyService struct {
 	Service
-	connectionMu sync.RWMutex
-	config       config.Config
-	cancelFunc   context.CancelFunc
-
-	tunnelReadMu sync.Mutex
-
-	connPool *ConnectionPool
+	connectionMu   sync.RWMutex
+	config         config.Config
+	cancelFunc     context.CancelFunc
+	backendConns   []net.Conn
+	backendConnsMu sync.Mutex
+	connPool       *ConnectionPool
 }
 
 func NewProxyService(bus *event.Bus) *ProxyService {
@@ -62,6 +55,7 @@ func (s *ProxyService) Stop(ctx context.Context) error {
 		s.cancelFunc = nil
 	}
 
+	s.closeBackendConnections()
 	s.connPool.CleanupPool()
 
 	return s.Service.Stop(ctx)
@@ -99,7 +93,7 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 	switch evt.Type {
 	case event.ConnectionEstablished:
 		if conn, ok := evt.Data.(transport.Connection); ok {
-			s.startProxyMonitoring(s.Context(), conn)
+			s.startTunnelConnections(s.Context(), conn)
 		}
 
 	case event.ConnectionClosed:
@@ -108,11 +102,17 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 			s.cancelFunc = nil
 		}
 
+		s.closeBackendConnections()
 		s.connPool.CleanupPool()
 	}
 }
 
-func (s *ProxyService) startProxyMonitoring(ctx context.Context, conn transport.Connection) {
+func (s *ProxyService) startTunnelConnections(ctx context.Context, conn transport.Connection) {
+	cfg := s.GetConfig()
+	if !cfg.Connection.Tunnel {
+		return
+	}
+
 	if s.cancelFunc != nil {
 		s.cancelFunc()
 	}
@@ -120,16 +120,10 @@ func (s *ProxyService) startProxyMonitoring(ctx context.Context, conn transport.
 	monitorCtx, cancelFunc := context.WithCancel(ctx)
 	s.cancelFunc = cancelFunc
 
-	binaryInput := conn.BinaryInput()
-	binaryOutput := conn.BinaryOutput()
-	if binaryInput == nil || binaryOutput == nil {
-		return
-	}
-
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		s.proxyHandler(monitorCtx, conn)
+		s.createBackendConnections(monitorCtx)
 	}()
 
 	s.wg.Add(1)
@@ -155,132 +149,129 @@ func (s *ProxyService) poolMaintenance(ctx context.Context) {
 	}
 }
 
-func (s *ProxyService) proxyHandler(ctx context.Context, conn transport.Connection) {
-	tunnelInput := conn.BinaryInput()
-	tunnelOutput := conn.BinaryOutput()
-	if tunnelInput == nil || tunnelOutput == nil {
-		return
-	}
+func (s *ProxyService) createBackendConnections(ctx context.Context) {
+	s.backendConnsMu.Lock()
+	s.backendConns = make([]net.Conn, 0, poolSize)
 
-	buffer := make([]byte, bufferSize)
-	reqNum := 0
+	for range poolSize {
+		conn, err := s.createBackendConnection()
+		if err != nil {
+			s.bus.Publish(event.Event{
+				Type: event.ConnectionFailed,
+				Data: err,
+				Ctx:  ctx,
+			})
+			continue
+		}
+		s.backendConns = append(s.backendConns, conn)
+	}
+	s.backendConnsMu.Unlock()
+
+	maintenanceTicker := time.NewTicker(10 * time.Second)
+	keepAliveTicker := time.NewTicker(30 * time.Second)
+	defer maintenanceTicker.Stop()
+	defer keepAliveTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		default:
-			s.tunnelReadMu.Lock()
-			reqNum++
-			currentReqNum := reqNum
-
-			n, err := tunnelOutput.Read(buffer)
-			if err != nil {
-				s.tunnelReadMu.Unlock()
-				if err != io.EOF {
-					s.bus.Publish(event.Event{
-						Type: event.ConnectionFailed,
-						Data: err,
-						Ctx:  ctx,
-					})
-				}
-				return
-			}
-
-			if n > 0 {
-				// This blocks the next Read until this request is completely processed
-				s.handleRequest(ctx, buffer[:n], tunnelInput, currentReqNum)
-			}
-
-			// Allow the next read only after this request is fully processed
-			s.tunnelReadMu.Unlock()
+		case <-maintenanceTicker.C:
+			s.maintainBackendConnections(ctx)
+		case <-keepAliveTicker.C:
+			s.keepAliveBackendConnections()
 		}
 	}
 }
 
-func (s *ProxyService) handleRequest(ctx context.Context, requestData []byte, tunnelInput io.Writer, reqNum int) {
-	conn, idx := s.connPool.GetConnection(s.GetConfig())
+func (s *ProxyService) createBackendConnection() (net.Conn, error) {
+	cfg := s.GetConfig()
+	backendAddr := net.JoinHostPort(cfg.Connection.Host, "9090")
 
-	defer func() {
-		if conn != nil && idx >= 0 {
-			s.connPool.ReleaseConnection(idx)
-		}
-	}()
-
-	if conn == nil {
-		return
+	dialer := &net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
 	}
 
-	_, err := conn.Write(requestData)
-	if err != nil {
-		s.connPool.RemoveConnection(idx)
-		return
-	}
-
-	respBuffer := make([]byte, bufferSize)
-
-	if err := conn.SetReadDeadline(time.Now().Add(initialReadWait)); err != nil {
-		s.connPool.RemoveConnection(idx)
-		return
-	}
-
-	var receivedData bool
-	var inactivityTimer *time.Timer
-	inactivityTimeout := 500 * time.Millisecond
-
-	inactivityTimer = time.AfterFunc(inactivityTimeout, func() {
-		if receivedData {
-			_ = conn.SetReadDeadline(time.Now().Add(1 * time.Microsecond))
-		}
+	tlsConn, err := tls.DialWithDialer(dialer, "tcp", backendAddr, &tls.Config{
+		InsecureSkipVerify: true,
 	})
-	defer inactivityTimer.Stop()
+	if err != nil {
+		return nil, err
+	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			n, err := conn.Read(respBuffer)
+	if tcpConn, ok := tlsConn.NetConn().(*net.TCPConn); ok {
+		_ = tcpConn.SetKeepAlive(true)
+		_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+	}
 
-			if n > 0 {
-				receivedData = true
+	return tlsConn, nil
+}
 
-				_, writeErr := tunnelInput.Write(respBuffer[:n])
-				if writeErr != nil {
-					return
-				}
+func (s *ProxyService) keepAliveBackendConnections() {
+	s.backendConnsMu.Lock()
+	defer s.backendConnsMu.Unlock()
 
-				// After getting data, extend the read deadline for streaming data
-				if err := conn.SetReadDeadline(time.Now().Add(initialReadWait)); err != nil {
-					s.connPool.RemoveConnection(idx)
-					return
-				}
+	for _, conn := range s.backendConns {
+		if conn != nil {
+			_ = conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
+			_, _ = conn.Write([]byte{0})
+			_ = conn.SetWriteDeadline(time.Time{})
+		}
+	}
+}
 
-				inactivityTimer.Reset(inactivityTimeout)
+func (s *ProxyService) maintainBackendConnections(ctx context.Context) {
+	s.backendConnsMu.Lock()
+	defer s.backendConnsMu.Unlock()
+
+	for i, conn := range s.backendConns {
+		if conn == nil || s.isConnectionBroken(conn) {
+			if conn != nil {
+				_ = conn.Close()
 			}
-
-			if err != nil {
-				// If it's EOF, we're done with this request
-				if err == io.EOF {
-					return
-				}
-
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					// If we got data and then a timeout, it's likely the end of the message
-					if receivedData {
-						return
-					}
-
-					// Initial timeout with no data means server didn't respond
-					s.connPool.RemoveConnection(idx)
-					return
-				}
-
-				s.connPool.RemoveConnection(idx)
-				return
+			newConn, err := s.createBackendConnection()
+			if err == nil {
+				s.backendConns[i] = newConn
+			} else {
+				s.backendConns[i] = nil
 			}
 		}
 	}
+}
+
+func (s *ProxyService) isConnectionBroken(conn net.Conn) bool {
+	if conn == nil {
+		return true
+	}
+
+	_ = conn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
+	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
+
+	buffer := make([]byte, 1)
+	_, err := conn.Read(buffer)
+
+	if err == nil {
+		return false
+	}
+
+	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		return false
+	}
+
+	return true
+}
+
+func (s *ProxyService) closeBackendConnections() {
+	s.backendConnsMu.Lock()
+	defer s.backendConnsMu.Unlock()
+
+	for _, conn := range s.backendConns {
+		if conn != nil {
+			_ = conn.Close()
+		}
+	}
+	s.backendConns = nil
 }
 
 func (s *ProxyService) createLocalConnection(cfg config.Config) (net.Conn, error) {

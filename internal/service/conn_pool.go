@@ -24,7 +24,6 @@ type ConnectionPool struct {
 	mu   sync.Mutex
 	pool []*pooledConnection
 
-	// Function that creates new connections when needed
 	createConn func(config.Config) (net.Conn, error)
 }
 
@@ -96,7 +95,6 @@ func (p *ConnectionPool) GetConnection(cfg config.Config) (net.Conn, int) {
 	// Try to find an idle live connection
 	for i, pc := range p.pool {
 		if pc != nil && pc.conn != nil && !pc.inUse {
-			// We shouldn't hit this since we're closing connections after use
 			if isConnAlive(pc.conn) {
 				pc.inUse = true
 				return pc.conn, i
@@ -207,8 +205,7 @@ func (p *ConnectionPool) CleanIdleConnections() {
 			continue
 		}
 
-		// This ensures we don't keep HTTP/1.1 persistent connections around too long
-		if now.Sub(pc.lastUsed) > 5*time.Second {
+		if now.Sub(pc.lastUsed) > 10*time.Second {
 			_ = pc.conn.Close()
 			pc.conn = nil
 		}
