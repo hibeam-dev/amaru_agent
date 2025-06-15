@@ -92,14 +92,12 @@ func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) erro
 
 	s.bus.Publish(event.Event{Type: event.ConnectionEstablished, Data: conn, Ctx: ctx})
 
-	// Start connection loop
 	s.wg.Add(1)
 	go func(ctx context.Context) {
 		defer s.wg.Done()
 		s.runConnectionLoop(ctx)
 	}(ctx)
 
-	// Start connection monitoring
 	monitorCtx, cancelMonitor := context.WithCancel(ctx)
 	s.monitorCancelFunc = cancelMonitor
 	s.wg.Add(1)

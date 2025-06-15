@@ -53,14 +53,6 @@ func (m *mockConnection) CheckHealth(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockConnection) BinaryInput() io.WriteCloser {
-	return nil
-}
-
-func (m *mockConnection) BinaryOutput() io.Reader {
-	return nil
-}
-
 func TestRegisterTransport(t *testing.T) {
 	originalRegistry := make(map[string]ConnCreator)
 	maps.Copy(originalRegistry, transportRegistry)
