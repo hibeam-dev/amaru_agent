@@ -1,8 +1,8 @@
 version: 2
 
 builds:
-  - main: ./cmd/cortex_agent
-    binary: cortex_agent
+  - main: ./cmd/amaru_agent
+    binary: amaru_agent
     goos:
       - linux
       - darwin

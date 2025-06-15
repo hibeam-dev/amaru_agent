@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"erlang-solutions.com/cortex_agent/internal/util"
+	"erlang-solutions.com/amaru_agent/internal/util"
 	"github.com/BurntSushi/toml"
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 	"golang.org/x/text/language"

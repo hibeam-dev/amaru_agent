@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"sync"
 
-	"erlang-solutions.com/cortex_agent/internal/config"
-	"erlang-solutions.com/cortex_agent/internal/i18n"
-	"erlang-solutions.com/cortex_agent/internal/transport"
-	"erlang-solutions.com/cortex_agent/internal/util"
+	"erlang-solutions.com/amaru_agent/internal/config"
+	"erlang-solutions.com/amaru_agent/internal/i18n"
+	"erlang-solutions.com/amaru_agent/internal/transport"
+	"erlang-solutions.com/amaru_agent/internal/util"
 	"golang.org/x/crypto/ssh"
 )
 

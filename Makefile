@@ -1,12 +1,12 @@
 .PHONY: build clean test lint mocks
 
-BINARY_NAME=cortex_agent
+BINARY_NAME=amaru_agent
 BUILD_DIR=bin
 
 build:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	@go build -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/cortex_agent
+	@go build -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/amaru_agent
 
 clean:
 	@echo "Cleaning up..."
@@ -32,7 +32,7 @@ cover-html:
 mocks:
 	@echo "Generating mocks..."
 	@go install go.uber.org/mock/mockgen@latest
-	@$(shell go env GOPATH)/bin/mockgen -destination=internal/transport/mocks/mock_connection.go -package=mocks erlang-solutions.com/cortex_agent/internal/transport Connection
+	@$(shell go env GOPATH)/bin/mockgen -destination=internal/transport/mocks/mock_connection.go -package=mocks erlang-solutions.com/amaru_agent/internal/transport Connection
 
 lint:
 	@echo "Running linter..."

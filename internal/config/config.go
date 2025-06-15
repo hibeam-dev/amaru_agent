@@ -3,8 +3,8 @@ package config
 import (
 	"time"
 
-	"erlang-solutions.com/cortex_agent/internal/i18n"
-	"erlang-solutions.com/cortex_agent/internal/util"
+	"erlang-solutions.com/amaru_agent/internal/i18n"
+	"erlang-solutions.com/amaru_agent/internal/util"
 	"github.com/BurntSushi/toml"
 )
 
