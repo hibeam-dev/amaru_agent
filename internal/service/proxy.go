@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -166,6 +167,12 @@ func (s *ProxyService) createBackendConnections(ctx context.Context) {
 			continue
 		}
 		s.backendConns = append(s.backendConns, conn)
+
+		s.wg.Add(1)
+		go func(backendConn net.Conn, connIndex int) {
+			defer s.wg.Done()
+			s.handleBackendConnection(ctx, backendConn, connIndex)
+		}(conn, len(s.backendConns)-1)
 	}
 	s.backendConnsMu.Unlock()
 
@@ -254,6 +261,12 @@ func (s *ProxyService) maintainBackendConnections(ctx context.Context) {
 			newConn, err := s.createBackendConnection()
 			if err == nil {
 				s.backendConns[i] = newConn
+
+				s.wg.Add(1)
+				go func(backendConn net.Conn, connIndex int) {
+					defer s.wg.Done()
+					s.handleBackendConnection(ctx, backendConn, connIndex)
+				}(newConn, i)
 			} else {
 				util.Warn(i18n.T("proxy_backend_connection_replacement_failed", map[string]any{
 					"type":  "proxy",
@@ -360,4 +373,145 @@ func (s *ProxyService) createLocalConnection(cfg config.Config) (net.Conn, error
 	}))
 
 	return conn, nil
+}
+
+func (s *ProxyService) handleBackendConnection(ctx context.Context, backendConn net.Conn, connIndex int) {
+	cfg := s.GetConfig()
+
+	util.Debug(i18n.T("proxy_backend_handler_starting", map[string]any{
+		"type":  "proxy",
+		"Index": connIndex,
+	}))
+
+	defer func() {
+		util.Debug(i18n.T("proxy_backend_handler_stopping", map[string]any{
+			"type":  "proxy",
+			"Index": connIndex,
+		}))
+	}()
+
+	buffer := make([]byte, 4096)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			_ = backendConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+			n, err := backendConn.Read(buffer)
+			if err != nil {
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					continue // Timeout is expected, continue monitoring
+				}
+				util.Debug(i18n.T("proxy_backend_read_error", map[string]any{
+					"type":  "proxy",
+					"Index": connIndex,
+					"Error": err,
+				}))
+				return
+			}
+
+			if n > 0 {
+				// Handle request: get local connection, send data, get response, send back
+				s.wg.Add(1)
+				go func(data []byte) {
+					defer s.wg.Done()
+					s.handleSimpleRequest(ctx, backendConn, connIndex, data, cfg)
+				}(buffer[:n])
+			}
+		}
+	}
+}
+
+func (s *ProxyService) handleSimpleRequest(ctx context.Context, backendConn net.Conn, connIndex int, requestData []byte, cfg config.Config) {
+	util.Debug(i18n.T("proxy_request_handling_starting", map[string]any{
+		"type":  "proxy",
+		"Index": connIndex,
+	}))
+
+	defer func() {
+		util.Debug(i18n.T("proxy_request_handling_stopping", map[string]any{
+			"type":  "proxy",
+			"Index": connIndex,
+		}))
+	}()
+
+	// Get a fresh local connection for this request
+	localConn, poolIdx := s.connPool.GetConnection(cfg)
+	if localConn == nil {
+		util.Warn(i18n.T("proxy_local_connection_failed_for_data", map[string]any{
+			"type":  "proxy",
+			"Index": connIndex,
+		}))
+		return
+	}
+	defer s.connPool.ReleaseConnection(poolIdx)
+	defer func() { _ = localConn.Close() }()
+
+	_, err := localConn.Write(requestData)
+	if err != nil {
+		util.Warn(i18n.T("proxy_initial_data_write_failed", map[string]any{
+			"type":  "proxy",
+			"Index": connIndex,
+			"Error": err,
+		}))
+		return
+	}
+
+	if tcpConn, ok := localConn.(*net.TCPConn); ok {
+		_ = tcpConn.SetNoDelay(true)
+	}
+
+	responseBuffer := make([]byte, 64*1024)
+	var response []byte
+
+	// Set shorter read timeout to avoid backend connection issues
+	_ = localConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+	for {
+		n, err := localConn.Read(responseBuffer)
+		if err != nil {
+			if err == io.EOF {
+				break // Normal end of response
+			}
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				break // Timeout is normal for HTTP keep-alive
+			}
+			util.Debug(i18n.T("proxy_local_response_read_error", map[string]any{
+				"type":  "proxy",
+				"Index": connIndex,
+				"Error": err,
+			}))
+			break
+		}
+
+		if n > 0 {
+			response = append(response, responseBuffer[:n]...)
+			// Reset deadline for additional data
+			_ = localConn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		}
+	}
+
+	if len(response) > 0 {
+		_, err = backendConn.Write(response)
+		if err != nil {
+			util.Warn(i18n.T("proxy_response_write_failed", map[string]any{
+				"type":  "proxy",
+				"Index": connIndex,
+				"Error": err,
+			}))
+			return
+		}
+
+		if tcpConn, ok := backendConn.(*net.TCPConn); ok {
+			_ = tcpConn.SetNoDelay(true)
+		}
+
+		util.Debug(i18n.T("proxy_response_sent", map[string]any{
+			"type":  "proxy",
+			"Index": connIndex,
+			"Size":  len(response),
+		}))
+	}
 }

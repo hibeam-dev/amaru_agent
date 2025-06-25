@@ -264,7 +264,7 @@ func (p *ConnectionPool) CleanIdleConnections() {
 		}
 
 		if pc.conn == nil {
-			if now.Sub(pc.lastUsed) > 10*time.Second {
+			if now.Sub(pc.lastUsed) > 60*time.Second {
 				util.Debug(i18n.T("pool_slot_cleaned", map[string]any{
 					"type":  "pool",
 					"Index": i,
@@ -275,7 +275,7 @@ func (p *ConnectionPool) CleanIdleConnections() {
 			continue
 		}
 
-		if now.Sub(pc.lastUsed) > 10*time.Second {
+		if now.Sub(pc.lastUsed) > 60*time.Second {
 			util.Debug(i18n.T("pool_idle_connection_closing", map[string]any{
 				"type":  "pool",
 				"Index": i,
