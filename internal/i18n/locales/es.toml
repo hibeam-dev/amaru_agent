@@ -361,3 +361,45 @@ other = "Cerrando conexión inactiva en ranura del pool {{.Index}}"
 
 [pool_idle_cleanup_completed]
 other = "Limpieza de conexiones inactivas completada ({{.Cleaned}} conexiones limpiadas)"
+
+[proxy_backend_handler_starting]
+other = "Iniciando manejador de conexión backend para conexión {{.Index}}"
+
+[proxy_backend_handler_stopping]
+other = "Deteniendo manejador de conexión backend para conexión {{.Index}}"
+
+[proxy_backend_read_error]
+other = "Error leyendo de conexión backend {{.Index}}: {{.Error}}"
+
+[proxy_local_connection_failed_for_data]
+other = "Fallo al obtener conexión local para reenvío de datos desde backend {{.Index}}"
+
+[proxy_data_forwarding_starting]
+other = "Iniciando reenvío de datos para conexión backend {{.Index}}"
+
+[proxy_data_forwarding_stopping]
+other = "Deteniendo reenvío de datos para conexión backend {{.Index}}"
+
+[proxy_initial_data_write_failed]
+other = "Fallo al escribir datos iniciales a conexión local para backend {{.Index}}: {{.Error}}"
+
+[proxy_backend_to_local_copy_error]
+other = "Error copiando datos de backend a local para conexión {{.Index}}: {{.Error}}"
+
+[proxy_local_to_backend_copy_error]
+other = "Error copiando datos de local a backend para conexión {{.Index}}: {{.Error}}"
+
+[proxy_request_handling_starting]
+other = "Iniciando manejo de petición para conexión backend {{.Index}}"
+
+[proxy_request_handling_stopping]
+other = "Deteniendo manejo de petición para conexión backend {{.Index}}"
+
+[proxy_local_response_read_error]
+other = "Error leyendo respuesta de aplicación local para conexión {{.Index}}: {{.Error}}"
+
+[proxy_response_write_failed]
+other = "Fallo al escribir respuesta al backend para conexión {{.Index}}: {{.Error}}"
+
+[proxy_response_sent]
+other = "Respuesta enviada al backend para conexión {{.Index}} ({{.Size}} bytes)"

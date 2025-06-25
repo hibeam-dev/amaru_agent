@@ -367,3 +367,45 @@ other = "Closing idle connection in pool slot {{.Index}}"
 
 [pool_idle_cleanup_completed]
 other = "Idle connection cleanup completed ({{.Cleaned}} connections cleaned)"
+
+[proxy_backend_handler_starting]
+other = "Starting backend connection handler for connection {{.Index}}"
+
+[proxy_backend_handler_stopping]
+other = "Stopping backend connection handler for connection {{.Index}}"
+
+[proxy_backend_read_error]
+other = "Error reading from backend connection {{.Index}}: {{.Error}}"
+
+[proxy_local_connection_failed_for_data]
+other = "Failed to get local connection for data forwarding from backend {{.Index}}"
+
+[proxy_data_forwarding_starting]
+other = "Starting data forwarding for backend connection {{.Index}}"
+
+[proxy_data_forwarding_stopping]
+other = "Stopping data forwarding for backend connection {{.Index}}"
+
+[proxy_initial_data_write_failed]
+other = "Failed to write initial data to local connection for backend {{.Index}}: {{.Error}}"
+
+[proxy_backend_to_local_copy_error]
+other = "Error copying data from backend to local for connection {{.Index}}: {{.Error}}"
+
+[proxy_local_to_backend_copy_error]
+other = "Error copying data from local to backend for connection {{.Index}}: {{.Error}}"
+
+[proxy_request_handling_starting]
+other = "Starting request handling for backend connection {{.Index}}"
+
+[proxy_request_handling_stopping]
+other = "Stopping request handling for backend connection {{.Index}}"
+
+[proxy_local_response_read_error]
+other = "Error reading response from local application for connection {{.Index}}: {{.Error}}"
+
+[proxy_response_write_failed]
+other = "Failed to write response to backend for connection {{.Index}}: {{.Error}}"
+
+[proxy_response_sent]
+other = "Response sent to backend for connection {{.Index}} ({{.Size}} bytes)"
