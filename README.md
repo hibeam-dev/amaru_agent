@@ -176,7 +176,7 @@ make mocks
 ## Contributing
 
 1. Fork repository
-2. Create branch: `git checkout -b username/issue-number_feature-name`
+2. Create branch: `git checkout -b username/issue-number-feature_name`
 3. Make changes
 4. Test: `make test` and `make cover`
 5. Lint: `make lint` and `make fmt`
