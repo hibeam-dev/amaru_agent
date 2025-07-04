@@ -28,37 +28,6 @@ make build
 
 The binary will be available in the `bin/` directory.
 
-## Development
-
-```bash
-# Clone and setup
-git clone https://github.com/Erlang-Solutions/amaru_agent.git
-cd amaru_agent
-go mod download
-
-# Install linter (recommended)
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
-# Install test mocking tool (recommended for development)
-go install go.uber.org/mock/mockgen@latest
-
-# Build and test
-make build
-make test
-```
-
-
-### Make Commands
-
-```bash
-make        # Build application
-make test   # Run tests
-make cover  # Test coverage stats
-make lint   # Run linter
-make fmt    # Format code
-make clean  # Clean artifacts
-```
-
 ## Usage
 
 ```bash
@@ -116,33 +85,6 @@ level = "info"           # Log level
 logfile = "/path/to/log" # Log file path
 ```
 
-### Testing
-
-This project uses [mockgen](https://github.com/uber-go/mock) from Uber
-to generate mocks for interfaces.
-
-To generate a mock for the current interfaces:
-
-```bash
-make mocks
-```
-
-## Contributing
-
-1. Fork repository
-2. Create branch: `git checkout -b username/issue-number-feature_name`
-3. Make changes
-4. Test: `make test` and `make cover`
-5. Lint: `make lint` and `make fmt`
-6. Commit changes
-7. Push: `git push origin username/issue-number_feature-name`
-8. Create Pull Request
-
-Before submitting, ensure:
-- All tests pass
-- Code passes linting
-- New code has appropriate test coverage
-- Documentation is up to date
 
 ## License
 
