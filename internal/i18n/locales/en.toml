@@ -30,7 +30,7 @@ other = "Reconnection failed: {{.Error}}. Will retry in {{.Delay}}."
 [reconnection_successful]
 other = "Reconnection successful."
 
-[immediate_reconnect_failed] 
+[immediate_reconnect_failed]
 other = "Immediate reconnection failed: {{.Error}}"
 
 [immediate_reconnect_successful]
@@ -409,3 +409,146 @@ other = "Failed to write response to backend for connection {{.Index}}: {{.Error
 
 [proxy_response_sent]
 other = "Response sent to backend for connection {{.Index}} ({{.Size}} bytes)"
+
+# WireGuard debug messages
+[wireguard_config_skipped_no_tunnel]
+other = "WireGuard config skipped - tunneling disabled"
+
+[wireguard_config_received]
+other = "WireGuard config received - endpoint: {{.Endpoint}}, pubkey: {{.PublicKey}}..."
+
+[wireguard_client_stopping_existing]
+other = "Stopping existing WireGuard client"
+
+[wireguard_client_creating]
+other = "Creating WireGuard client - port: {{.ListenPort}}, mtu: {{.MTU}}"
+
+[wireguard_client_starting]
+other = "Starting WireGuard client"
+
+[wireguard_registration_sending]
+other = "Sending WireGuard registration details"
+
+[wireguard_client_ip_obtained]
+other = "WireGuard client IP obtained: {{.ClientIP}}"
+
+[wireguard_client_ip_fallback]
+other = "WireGuard client IP fallback: {{.ClientIP}}"
+
+[wireguard_client_ip_failed]
+other = "Failed to get WireGuard client IP: {{.Error}}"
+
+[wireguard_registration_payload_sending]
+other = "Sending registration payload - status: {{.Status}}, clientIP: {{.ClientIP}}"
+
+[wireguard_tunnel_handler_started]
+other = "WireGuard tunnel handler started"
+
+[wireguard_tunnel_handler_stopped]
+other = "WireGuard tunnel handler stopped"
+
+[wireguard_connection_alive]
+other = "WireGuard connection is alive"
+
+[wireguard_config_awaiting]
+other = "Awaiting WireGuard config from server"
+
+[wireguard_config_parsed]
+other = "WireGuard config parsed - ip: {{.IP}}, endpoint: {{.Endpoint}}, pubkey: {{.PublicKey}}..."
+
+[wireguard_config_reading]
+other = "Reading WireGuard config from server"
+
+[wireguard_config_line_received]
+other = "WireGuard config line received ({{.Length}} bytes)"
+
+# SSH debug messages
+[ssh_subsystem_requesting]
+other = "Requesting SSH subsystem: {{.Subsystem}}"
+
+[ssh_subsystem_established]
+other = "SSH subsystem established: {{.Subsystem}}"
+
+[ssh_payload_sending]
+other = "Sending SSH payload - size: {{.PayloadSize}} bytes, type: {{.PayloadType}}"
+
+[ssh_payload_send_failed]
+other = "Failed to send SSH payload: {{.Error}}"
+
+[ssh_payload_sent]
+other = "SSH payload sent successfully"
+
+[ssh_connection_closed_during_send]
+other = "SSH connection closed while sending payload"
+
+[wireguard_config_timeout]
+other = "WireGuard config read timeout after {{.Timeout}}"
+
+[wireguard_config_timeout_error]
+other = "Timeout waiting for WireGuard config from server ({{.Timeout}})"
+
+[wireguard_config_received_in_time]
+other = "WireGuard config received within timeout"
+
+[wireguard_registration_ssh_sending]
+other = "Sending registration via SSH channel"
+
+[wireguard_registration_ssh_failed]
+other = "Failed to send registration via SSH: {{.Error}}"
+
+[wireguard_registration_ssh_success]
+other = "Registration sent via SSH successfully"
+
+[wireguard_client_tunnel_ip_debug]
+other = "WireGuard client TunnelIP: {{.TunnelIP}}"
+
+[wireguard_client_fallback_ip_debug]
+other = "WireGuard client fallback IP: {{.FallbackIP}}"
+
+[wireguard_config_debug]
+other = "WireGuard config: {{.Config}}"
+
+[wireguard_dial_error]
+other = "Failed to dial through WireGuard tunnel to {{.Address}}: {{.Error}}"
+
+[wireguard_listen_error]
+other = "Failed to listen on WireGuard tunnel at {{.Address}}: {{.Error}}"
+
+[wireguard_tunnel_forwarding_setup]
+other = "Setting up tunnel forwarding to {{.LocalAddr}}"
+
+[wireguard_tunnel_no_client]
+other = "No WireGuard client available for tunnel forwarding"
+
+[wireguard_tunnel_listen_failed]
+other = "Failed to listen on tunnel: {{.Error}}"
+
+[wireguard_tunnel_listener_started]
+other = "Tunnel listener started on port {{.Port}}"
+
+[wireguard_tunnel_accept_failed]
+other = "Failed to accept tunnel connection: {{.Error}}"
+
+[wireguard_tunnel_connection_accepted]
+other = "Tunnel connection accepted from {{.RemoteAddr}}"
+
+[wireguard_tunnel_forward_failed]
+other = "Failed to connect to local application at {{.LocalAddr}}: {{.Error}}"
+
+[wireguard_tunnel_forward_started]
+other = "Forwarding tunnel connection to {{.LocalAddr}}"
+
+[wireguard_tunnel_proxy_error]
+other = "Tunnel proxy error: {{.Error}}"
+
+[wireguard_registration_missing_connections]
+other = "Registration failed - missing connections (SSH: {{.HasSSH}}, WG: {{.HasClient}})"
+
+[wireguard_registration_connections_ok]
+other = "Registration connections verified"
+
+[wireguard_registration_getting_client_ip]
+other = "Getting WireGuard client IP address"
+
+[wireguard_registration_timeout]
+other = "WireGuard registration timed out - SSH connection never became available"

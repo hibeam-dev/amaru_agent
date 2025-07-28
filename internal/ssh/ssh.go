@@ -3,6 +3,7 @@ package ssh
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -117,11 +118,21 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 		return nil, util.NewError(util.ErrTypeSession, i18n.T("ssh_session_failed", map[string]any{}), err)
 	}
 
+	util.Debug(i18n.T("ssh_subsystem_requesting", map[string]any{
+		"type":      "ssh",
+		"Subsystem": Subsystem,
+	}))
+
 	if err = session.RequestSubsystem(Subsystem); err != nil {
 		cleanup(session, client)
 		return nil, util.NewError(util.ErrTypeSubsystem,
 			i18n.T("ssh_subsystem_failed", map[string]any{"Subsystem": Subsystem}), err)
 	}
+
+	util.Debug(i18n.T("ssh_subsystem_established", map[string]any{
+		"type":      "ssh",
+		"Subsystem": Subsystem,
+	}))
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
@@ -197,8 +208,31 @@ func (c *Conn) SendPayload(payload any) error {
 		return util.NewError(util.ErrTypeConnection, "failed to marshal payload", err)
 	}
 
+	util.Debug(i18n.T("ssh_payload_sending", map[string]any{
+		"type":        "ssh",
+		"PayloadSize": len(data),
+		"PayloadType": fmt.Sprintf("%T", payload),
+	}))
+
 	data = append(data, '\n')
 	_, err = c.stdin.Write(data)
+
+	if err != nil {
+		util.Debug(i18n.T("ssh_payload_send_failed", map[string]any{
+			"type":  "ssh",
+			"Error": err,
+		}))
+		// Check if this is an EOF or connection closed error
+		if err.Error() == "EOF" || err.Error() == "io: read/write on closed pipe" {
+			util.Debug(i18n.T("ssh_connection_closed_during_send", map[string]any{
+				"type": "ssh",
+			}))
+		}
+	} else {
+		util.Debug(i18n.T("ssh_payload_sent", map[string]any{
+			"type": "ssh",
+		}))
+	}
 
 	return err
 }

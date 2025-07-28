@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -19,6 +21,20 @@ type ConnectionService struct {
 	connection        transport.Connection
 	config            config.Config
 	monitorCancelFunc context.CancelFunc
+}
+
+type WireGuardConfig struct {
+	PrivateKey   string   `json:"private_key"`
+	PublicKey    string   `json:"public_key"`
+	Endpoint     string   `json:"endpoint"`
+	AllowedIPs   []string `json:"allowed_ips"`
+	PresharedKey string   `json:"preshared_key,omitempty"`
+	PersistentKA int      `json:"persistent_keepalive,omitempty"`
+	ListenPort   int      `json:"listen_port,omitempty"`
+	ServerPubKey string   `json:"server_public_key"`
+	DNS          string   `json:"dns,omitempty"`
+	MTU          int      `json:"mtu,omitempty"`
+	TunnelIP     string   `json:"tunnel_ip"`
 }
 
 func NewConnectionService(bus *event.Bus) *ConnectionService {
@@ -188,7 +204,111 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 	if err := conn.SendPayload(payload); err != nil {
 		return util.NewError(util.ErrTypeConnection, i18n.T("config_send_error", map[string]any{"Error": err}), err)
 	}
+
+	// If tunneling is enabled, expect WireGuard config response
+	if cfg.Connection.Tunnel {
+		util.Debug(i18n.T("wireguard_config_awaiting", map[string]any{
+			"type": "connection",
+		}))
+
+		wgConfig, err := s.receiveWireGuardConfigWithTimeout(conn, 60*time.Second)
+		if err != nil {
+			return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_error", map[string]any{"Error": err}), err)
+		}
+
+		util.Debug(i18n.T("wireguard_config_parsed", map[string]any{
+			"type":      "connection",
+			"Endpoint":  wgConfig.Endpoint,
+			"IP":        wgConfig.TunnelIP,
+			"PublicKey": wgConfig.PublicKey[:16] + "...",
+		}))
+
+		// Store WireGuard config for proxy service
+		s.bus.Publish(event.Event{
+			Type: event.WireGuardConfigReceived,
+			Data: wgConfig,
+			Ctx:  s.Context(),
+		})
+	}
+
 	return nil
+}
+
+func (s *ConnectionService) receiveWireGuardConfig(conn transport.Connection) (*WireGuardConfig, error) {
+	util.Debug(i18n.T("wireguard_config_reading", map[string]any{
+		"type": "connection",
+	}))
+
+	startTime := time.Now()
+	scanner := bufio.NewScanner(conn.Stdout())
+	scanner.Scan()
+	readDuration := time.Since(startTime)
+
+	if err := scanner.Err(); err != nil {
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_read_error", map[string]any{"Error": err}), err)
+	}
+
+	line := scanner.Text()
+	if line == "" {
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_empty", map[string]any{}), nil)
+	}
+
+	util.Debug(i18n.T("wireguard_config_line_received", map[string]any{
+		"type":     "connection",
+		"Length":   len(line),
+		"Duration": readDuration.String(),
+	}))
+
+	var response struct {
+		Type      string           `json:"type"`
+		WireGuard *WireGuardConfig `json:"wireguard,omitempty"`
+		Error     string           `json:"error,omitempty"`
+	}
+
+	if err := json.Unmarshal([]byte(line), &response); err != nil {
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_parse_error", map[string]any{"Error": err}), err)
+	}
+
+	if response.Error != "" {
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_server_error", map[string]any{"Error": response.Error}), nil)
+	}
+
+	if response.Type != "wireguard_config" || response.WireGuard == nil {
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_invalid_response", map[string]any{}), nil)
+	}
+
+	return response.WireGuard, nil
+}
+
+func (s *ConnectionService) receiveWireGuardConfigWithTimeout(conn transport.Connection, timeout time.Duration) (*WireGuardConfig, error) {
+	type result struct {
+		config *WireGuardConfig
+		err    error
+	}
+
+	resultCh := make(chan result, 1)
+
+	go func() {
+		config, err := s.receiveWireGuardConfig(conn)
+		resultCh <- result{config: config, err: err}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case res := <-resultCh:
+		util.Debug(i18n.T("wireguard_config_received_in_time", map[string]any{
+			"type": "connection",
+		}))
+		return res.config, res.err
+	case <-timer.C:
+		util.Debug(i18n.T("wireguard_config_timeout", map[string]any{
+			"type":    "connection",
+			"Timeout": timeout.String(),
+		}))
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_timeout_error", map[string]any{"Timeout": timeout}), nil)
+	}
 }
 
 func (s *ConnectionService) runConnectionLoop(ctx context.Context) {
