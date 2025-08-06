@@ -1,311 +1,287 @@
 package service
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
+	"log"
 	"net"
+	"net/netip"
 	"sync"
-	"time"
 
-	"erlang-solutions.com/amaru_agent/internal/config"
+	"golang.zx2c4.com/wireguard/conn"
+	"golang.zx2c4.com/wireguard/device"
+	"golang.zx2c4.com/wireguard/tun/netstack"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
 	"erlang-solutions.com/amaru_agent/internal/i18n"
 	"erlang-solutions.com/amaru_agent/internal/util"
 )
 
-const (
-	poolSize        = 5
-	connIdleTimeout = 60 * time.Second
-	connTimeout     = 5 * time.Second
-)
-
-type pooledConnection struct {
-	conn     net.Conn
-	inUse    bool
-	lastUsed time.Time
+type WireGuardClient struct {
+	device     *device.Device
+	tun        *netstack.Net
+	tunDevice  any
+	privateKey wgtypes.Key
+	publicKey  wgtypes.Key
+	serverKey  wgtypes.Key
+	endpoint   string
+	allowedIPs []string
+	listenPort int
+	mtu        int
+	dns        string
+	tunnelIP   string
+	mu         sync.RWMutex
+	running    bool
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
-type ConnectionPool struct {
-	mu   sync.Mutex
-	pool []*pooledConnection
-
-	createConn func(config.Config) (net.Conn, error)
+type WireGuardClientConfig struct {
+	PrivateKey   string   `json:"private_key"`
+	PublicKey    string   `json:"public_key"`
+	Endpoint     string   `json:"endpoint"`
+	AllowedIPs   []string `json:"allowed_ips"`
+	PresharedKey string   `json:"preshared_key,omitempty"`
+	PersistentKA int      `json:"persistent_keepalive,omitempty"`
+	ListenPort   int      `json:"listen_port,omitempty"`
+	ServerPubKey string   `json:"server_public_key"`
+	DNS          string   `json:"dns,omitempty"`
+	MTU          int      `json:"mtu,omitempty"`
+	TunnelIP     string   `json:"tunnel_ip"`
 }
 
-func (p *ConnectionPool) GetPoolSize() int {
-	return len(p.pool)
-}
+func NewWireGuardClient(config *WireGuardClientConfig) (*WireGuardClient, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 
-func (p *ConnectionPool) GetPoolStatus() (total, inUse, empty int) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	total = len(p.pool)
-
-	for _, pc := range p.pool {
-		if pc == nil {
-			empty++
-			continue
-		}
-
-		if pc.inUse {
-			inUse++
-		}
+	client := &WireGuardClient{
+		endpoint:   config.Endpoint,
+		allowedIPs: config.AllowedIPs,
+		listenPort: config.ListenPort,
+		mtu:        config.MTU,
+		dns:        config.DNS,
+		tunnelIP:   config.TunnelIP,
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 
-	return total, inUse, empty
-}
-
-func NewConnectionPool(createFn func(config.Config) (net.Conn, error)) *ConnectionPool {
-	return &ConnectionPool{
-		pool:       make([]*pooledConnection, poolSize),
-		createConn: createFn,
-	}
-}
-
-func (p *ConnectionPool) SetPoolConnection(idx int, conn net.Conn, inUse bool) {
-	if idx < 0 || idx >= len(p.pool) {
-		return
-	}
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.pool[idx] = &pooledConnection{
-		conn:     conn,
-		inUse:    inUse,
-		lastUsed: time.Now(),
-	}
-}
-
-func (p *ConnectionPool) GetConnection(cfg config.Config) (net.Conn, int) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	// Try to reuse a pooled entry with no connection
-	for i, pc := range p.pool {
-		if pc != nil && pc.conn == nil && !pc.inUse {
-			util.Debug(i18n.T("pool_reusing_slot", map[string]any{
-				"type":  "pool",
-				"Index": i,
-			}))
-			conn, err := p.createConn(cfg)
-			if err != nil {
-				util.Debug(i18n.T("pool_connection_creation_failed", map[string]any{
-					"type":  "pool",
-					"Index": i,
-					"Error": err,
-				}))
-				continue
-			}
-
-			pc.conn = conn
-			pc.inUse = true
-			pc.lastUsed = time.Now()
-			util.Debug(i18n.T("pool_connection_created", map[string]any{
-				"type":  "pool",
-				"Index": i,
-			}))
-			return conn, i
-		}
-	}
-
-	// Try to find an idle live connection
-	for i, pc := range p.pool {
-		if pc != nil && pc.conn != nil && !pc.inUse {
-			if isConnAlive(pc.conn) {
-				util.Debug(i18n.T("pool_connection_reused", map[string]any{
-					"type":  "pool",
-					"Index": i,
-				}))
-				pc.inUse = true
-				return pc.conn, i
-			}
-
-			util.Debug(i18n.T("pool_connection_dead", map[string]any{
-				"type":  "pool",
-				"Index": i,
-			}))
-			_ = pc.conn.Close()
-			pc.conn = nil
-		}
-	}
-
-	// Try to use an empty slot
-	for i, pc := range p.pool {
-		if pc == nil {
-			util.Debug(i18n.T("pool_using_empty_slot", map[string]any{
-				"type":  "pool",
-				"Index": i,
-			}))
-			conn, err := p.createConn(cfg)
-			if err != nil {
-				util.Debug(i18n.T("pool_connection_creation_failed", map[string]any{
-					"type":  "pool",
-					"Index": i,
-					"Error": err,
-				}))
-				return nil, -1
-			}
-
-			p.pool[i] = &pooledConnection{
-				conn:     conn,
-				inUse:    true,
-				lastUsed: time.Now(),
-			}
-			util.Debug(i18n.T("pool_connection_created", map[string]any{
-				"type":  "pool",
-				"Index": i,
-			}))
-			return conn, i
-		}
-	}
-
-	// Pool is full, create a one-off connection
-	util.Debug(i18n.T("pool_full_creating_oneoff", map[string]any{
-		"type": "pool",
-	}))
-	conn, err := p.createConn(cfg)
+	privateKey, err := parseKey(config.PrivateKey)
 	if err != nil {
-		util.Debug(i18n.T("pool_oneoff_creation_failed", map[string]any{
-			"type":  "pool",
-			"Error": err,
-		}))
-		return nil, -1
+		cancel()
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_private_key_error", map[string]any{"Error": err}), err)
+	}
+	client.privateKey = privateKey
+	client.publicKey = privateKey.PublicKey()
+
+	serverKey, err := parseKey(config.ServerPubKey)
+	if err != nil {
+		cancel()
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_server_key_error", map[string]any{"Error": err}), err)
+	}
+	client.serverKey = serverKey
+
+	if client.mtu == 0 {
+		client.mtu = 1420
+	}
+	if client.dns == "" {
+		client.dns = "8.8.8.8"
 	}
 
-	util.Debug(i18n.T("pool_oneoff_connection_created", map[string]any{
-		"type": "pool",
-	}))
-	return conn, -1
+	return client, nil
 }
 
-func (p *ConnectionPool) ReleaseConnection(idx int) {
-	if idx < 0 {
-		return
+func (c *WireGuardClient) Start() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.running {
+		return nil
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if idx >= len(p.pool) || p.pool[idx] == nil {
-		return
-	}
-
-	util.Debug(i18n.T("pool_connection_releasing", map[string]any{
-		"type":  "pool",
-		"Index": idx,
+	tunnelIP := c.tunnelIP
+	util.Debug(i18n.T("wireguard_client_tunnel_ip_debug", map[string]any{
+		"type":     "wireguard",
+		"TunnelIP": tunnelIP,
 	}))
-
-	// Ensuring we don't reuse connections that might have buffered responses
-	if p.pool[idx].conn != nil {
-		_ = p.pool[idx].conn.Close()
-		p.pool[idx].conn = nil
-	}
-
-	p.pool[idx].inUse = false
-	p.pool[idx].lastUsed = time.Now()
-}
-
-func (p *ConnectionPool) RemoveConnection(idx int) {
-	if idx < 0 {
-		return
-	}
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if idx >= len(p.pool) || p.pool[idx] == nil {
-		return
-	}
-
-	if p.pool[idx].conn != nil {
-		_ = p.pool[idx].conn.Close()
-	}
-	p.pool[idx] = nil
-}
-
-func (p *ConnectionPool) CleanupPool() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	util.Info(i18n.T("pool_cleanup_starting", map[string]any{
-		"type":  "pool",
-		"Count": len(p.pool),
-	}))
-
-	for i, conn := range p.pool {
-		if conn != nil && conn.conn != nil {
-			util.Debug(i18n.T("pool_connection_closing", map[string]any{
-				"type":  "pool",
-				"Index": i,
-			}))
-			_ = conn.conn.Close()
-			p.pool[i] = nil
+	if tunnelIP == "" {
+		var err error
+		tunnelIP, err = c.getClientIP()
+		if err != nil {
+			return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_client_ip_error", map[string]any{"Error": err}), err)
 		}
-	}
-
-	util.Info(i18n.T("pool_cleanup_completed", map[string]any{
-		"type": "pool",
-	}))
-}
-
-func (p *ConnectionPool) CleanIdleConnections() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	now := time.Now()
-	cleaned := 0
-
-	for i, pc := range p.pool {
-		if pc == nil {
-			continue
-		}
-
-		if pc.inUse {
-			continue
-		}
-
-		if pc.conn == nil {
-			if now.Sub(pc.lastUsed) > 60*time.Second {
-				util.Debug(i18n.T("pool_slot_cleaned", map[string]any{
-					"type":  "pool",
-					"Index": i,
-				}))
-				p.pool[i] = nil
-				cleaned++
-			}
-			continue
-		}
-
-		if now.Sub(pc.lastUsed) > 60*time.Second {
-			util.Debug(i18n.T("pool_idle_connection_closing", map[string]any{
-				"type":  "pool",
-				"Index": i,
-			}))
-			_ = pc.conn.Close()
-			pc.conn = nil
-			cleaned++
-		}
-	}
-
-	if cleaned > 0 {
-		util.Debug(i18n.T("pool_idle_cleanup_completed", map[string]any{
-			"type":    "pool",
-			"Cleaned": cleaned,
+		util.Debug(i18n.T("wireguard_client_fallback_ip_debug", map[string]any{
+			"type":       "wireguard",
+			"FallbackIP": tunnelIP,
 		}))
 	}
+
+	tun, tnet, err := netstack.CreateNetTUN(
+		[]netip.Addr{netip.MustParseAddr(tunnelIP)},
+		[]netip.Addr{netip.MustParseAddr(c.dns)},
+		c.mtu,
+	)
+	if err != nil {
+		return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_tun_error", map[string]any{"Error": err}), err)
+	}
+
+	c.tunDevice = tun
+	c.tun = tnet
+
+	// Create WireGuard device logger
+	logger := device.NewLogger(
+		device.LogLevelVerbose,
+		"wireguard-client: ",
+	)
+
+	c.device = device.NewDevice(tun, conn.NewDefaultBind(), logger)
+
+	// Configure WireGuard device
+	config := fmt.Sprintf("private_key=%s\n", keyToHex(c.privateKey))
+	if c.listenPort > 0 {
+		config += fmt.Sprintf("listen_port=%d\n", c.listenPort)
+	}
+
+	// Add server peer
+	config += fmt.Sprintf("public_key=%s\n", keyToHex(c.serverKey))
+	config += fmt.Sprintf("endpoint=%s\n", c.endpoint)
+	config += fmt.Sprintf("persistent_keepalive_interval=%d\n", 25)
+
+	for _, ip := range c.allowedIPs {
+		config += fmt.Sprintf("allowed_ip=%s\n", ip)
+	}
+
+	util.Debug(i18n.T("wireguard_config_debug", map[string]any{
+		"type":     "wireguard",
+		"Config":   config,
+		"Endpoint": c.endpoint,
+	}))
+
+	err = c.device.IpcSet(config)
+	if err != nil {
+		c.device.Close()
+		return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_error", map[string]any{"Error": err}), err)
+	}
+
+	err = c.device.Up()
+	if err != nil {
+		c.device.Close()
+		return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_start_error", map[string]any{"Error": err}), err)
+	}
+
+	c.running = true
+
+	util.Info(i18n.T("wireguard_client_started", map[string]any{
+		"type":     "wireguard",
+		"ClientIP": tunnelIP,
+		"Endpoint": c.endpoint,
+	}))
+
+	return nil
 }
 
-func isConnAlive(conn net.Conn) bool {
-	if conn == nil {
-		return false
+func (c *WireGuardClient) Stop() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.running {
+		return nil
 	}
 
-	err := conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
+	c.cancel()
+	c.running = false
+
+	if c.device != nil {
+		c.device.Close()
+		c.device = nil
+	}
+
+	c.tunDevice = nil
+	c.tun = nil
+
+	util.Info(i18n.T("wireguard_client_stopped", map[string]any{
+		"type": "wireguard",
+	}))
+
+	return nil
+}
+
+func (c *WireGuardClient) Dial(network, address string) (net.Conn, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if !c.running || c.tun == nil {
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_not_running", map[string]any{}), nil)
+	}
+
+	conn, err := c.tun.Dial(network, address)
 	if err != nil {
-		return false
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_dial_error", map[string]any{
+			"Address": address,
+			"Error":   err,
+		}), err)
 	}
 
-	defer func() { _ = conn.SetDeadline(time.Time{}) }()
+	return conn, nil
+}
 
-	_, err = conn.Write([]byte{})
-	return err == nil
+func (c *WireGuardClient) Listen(network, address string) (net.Listener, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if !c.running || c.tun == nil {
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_not_running", map[string]any{}), nil)
+	}
+
+	tcpAddr, err := net.ResolveTCPAddr(network, address)
+	if err != nil {
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_listen_error", map[string]any{
+			"Address": address,
+			"Error":   err,
+		}), err)
+	}
+
+	listener, err := c.tun.ListenTCP(tcpAddr)
+	if err != nil {
+		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_listen_error", map[string]any{
+			"Address": address,
+			"Error":   err,
+		}), err)
+	}
+
+	return listener, nil
+}
+
+func (c *WireGuardClient) IsRunning() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.running
+}
+
+func (c *WireGuardClient) GetTunnelIP() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.tunnelIP
+}
+
+func (c *WireGuardClient) getClientIP() (string, error) {
+	for _, ip := range c.allowedIPs {
+		if addr, err := netip.ParsePrefix(ip); err == nil {
+			return addr.Addr().String(), nil
+		}
+	}
+	return "", fmt.Errorf("no valid client IP found in allowedIPs")
+}
+
+func parseKey(keyStr string) (wgtypes.Key, error) {
+	return wgtypes.ParseKey(keyStr)
+}
+
+func keyToHex(key wgtypes.Key) string {
+	decoded, err := base64.StdEncoding.DecodeString(key.String())
+	if err != nil {
+		log.Printf("Error decoding base64 key: %v", err)
+		return ""
+	}
+	return hex.EncodeToString(decoded)
 }

@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"erlang-solutions.com/amaru_agent/internal/config"
 	"erlang-solutions.com/amaru_agent/internal/event"
@@ -18,18 +20,17 @@ import (
 
 type ProxyService struct {
 	Service
-	connectionMu   sync.RWMutex
-	config         config.Config
-	cancelFunc     context.CancelFunc
-	backendConns   []net.Conn
-	backendConnsMu sync.Mutex
-	connPool       *ConnectionPool
+	connectionMu sync.RWMutex
+	config       config.Config
+	cancelFunc   context.CancelFunc
+	wgClient     *WireGuardClient
+	wgConfig     *WireGuardConfig
+	sshConn      transport.Connection
 }
 
 func NewProxyService(bus *event.Bus) *ProxyService {
 	svc := &ProxyService{}
 	svc.Service = NewService("proxy", bus)
-	svc.connPool = NewConnectionPool(svc.createLocalConnection)
 	return svc
 }
 
@@ -42,7 +43,7 @@ func (s *ProxyService) Start(ctx context.Context) error {
 	s.AddSubscription(unsub)
 
 	connSub := s.bus.SubscribeMultiple(
-		[]string{event.ConnectionEstablished, event.ConnectionClosed},
+		[]string{event.ConnectionEstablished, event.ConnectionClosed, event.WireGuardConfigReceived},
 		s.handleConnectionEvents,
 	)
 	for _, sub := range connSub {
@@ -58,22 +59,20 @@ func (s *ProxyService) Stop(ctx context.Context) error {
 		s.cancelFunc = nil
 	}
 
-	s.closeBackendConnections()
-	s.connPool.CleanupPool()
+	s.connectionMu.Lock()
+	if s.wgClient != nil {
+		_ = s.wgClient.Stop()
+		s.wgClient = nil
+	}
+	s.connectionMu.Unlock()
 
 	return s.Service.Stop(ctx)
 }
 
 func (s *ProxyService) SetConfig(cfg config.Config) {
 	s.connectionMu.Lock()
-	oldCfg := s.config
 	s.config = cfg
 	s.connectionMu.Unlock()
-
-	if oldCfg.Application.Port != cfg.Application.Port ||
-		oldCfg.Application.IP != cfg.Application.IP {
-		s.connPool.CleanupPool()
-	}
 }
 
 func (s *ProxyService) GetConfig() config.Config {
@@ -96,7 +95,10 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 	switch evt.Type {
 	case event.ConnectionEstablished:
 		if conn, ok := evt.Data.(transport.Connection); ok {
-			s.startTunnelConnections(s.Context(), conn)
+			s.connectionMu.Lock()
+			s.sshConn = conn
+			s.connectionMu.Unlock()
+			util.Debug("[proxy] SSH connection stored")
 		}
 
 	case event.ConnectionClosed:
@@ -105,413 +107,388 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 			s.cancelFunc = nil
 		}
 
-		s.closeBackendConnections()
-		s.connPool.CleanupPool()
+		s.connectionMu.Lock()
+		if s.wgClient != nil {
+			_ = s.wgClient.Stop()
+			s.wgClient = nil
+		}
+		s.sshConn = nil
+		s.connectionMu.Unlock()
+
+		s.bus.Publish(event.Event{Type: event.WireGuardDisconnected, Ctx: s.Context()})
+
+	case event.WireGuardConfigReceived:
+		if wgConfig, ok := evt.Data.(*WireGuardConfig); ok {
+			s.handleWireGuardConfig(s.Context(), wgConfig)
+		} else {
+			util.Debug("[proxy] WireGuardConfigReceived event with invalid data type")
+		}
 	}
 }
 
-func (s *ProxyService) startTunnelConnections(ctx context.Context, conn transport.Connection) {
+func (s *ProxyService) handleWireGuardConfig(ctx context.Context, wgConfig *WireGuardConfig) {
 	cfg := s.GetConfig()
 	if !cfg.Connection.Tunnel {
+		util.Debug(i18n.T("wireguard_config_skipped_no_tunnel", map[string]any{
+			"type": "proxy",
+		}))
 		return
 	}
 
+	util.Debug(i18n.T("wireguard_config_received", map[string]any{
+		"type":      "proxy",
+		"Endpoint":  wgConfig.Endpoint,
+		"PublicKey": wgConfig.PublicKey[:16] + "...",
+	}))
+
+	s.connectionMu.Lock()
+	defer s.connectionMu.Unlock()
+
+	if s.wgClient != nil {
+		util.Debug(i18n.T("wireguard_client_stopping_existing", map[string]any{
+			"type": "proxy",
+		}))
+		_ = s.wgClient.Stop()
+	}
+
+	clientConfig := &WireGuardClientConfig{
+		PrivateKey:   wgConfig.PrivateKey,
+		PublicKey:    wgConfig.PublicKey,
+		Endpoint:     wgConfig.Endpoint,
+		AllowedIPs:   wgConfig.AllowedIPs,
+		PresharedKey: wgConfig.PresharedKey,
+		PersistentKA: wgConfig.PersistentKA,
+		ListenPort:   wgConfig.ListenPort,
+		ServerPubKey: wgConfig.ServerPubKey,
+		DNS:          wgConfig.DNS,
+		MTU:          wgConfig.MTU,
+		TunnelIP:     wgConfig.TunnelIP,
+	}
+
+	util.Debug(i18n.T("wireguard_client_creating", map[string]any{
+		"type":       "proxy",
+		"ListenPort": clientConfig.ListenPort,
+		"MTU":        clientConfig.MTU,
+		"TunnelIP":   clientConfig.TunnelIP,
+	}))
+
+	wgClient, err := NewWireGuardClient(clientConfig)
+	if err != nil {
+		util.LogError(i18n.T("wireguard_client_creation_failed", map[string]any{
+			"type":  "proxy",
+			"Error": err,
+		}), err)
+		s.bus.Publish(event.Event{Type: event.ProxyFailed, Data: err, Ctx: ctx})
+		return
+	}
+
+	util.Debug(i18n.T("wireguard_client_starting", map[string]any{
+		"type": "proxy",
+	}))
+
+	if err := wgClient.Start(); err != nil {
+		util.LogError(i18n.T("wireguard_client_start_failed", map[string]any{
+			"type":  "proxy",
+			"Error": err,
+		}), err)
+		s.bus.Publish(event.Event{Type: event.ProxyFailed, Data: err, Ctx: ctx})
+		return
+	}
+
+	s.wgClient = wgClient
+	s.wgConfig = wgConfig
+
+	util.Info(i18n.T("wireguard_client_established", map[string]any{
+		"type": "proxy",
+	}))
+
+	s.bus.Publish(event.Event{Type: event.WireGuardConnected, Ctx: ctx})
+
+	util.Debug(i18n.T("wireguard_registration_sending", map[string]any{
+		"type": "proxy",
+	}))
+
+	go func() {
+		for attempt := range 5 {
+			s.connectionMu.RLock()
+			currentSSHConn := s.sshConn
+			s.connectionMu.RUnlock()
+
+			if currentSSHConn != nil {
+				util.Debug(fmt.Sprintf("[proxy] SSH connection available on attempt %d", attempt+1))
+				if err := s.sendRegistrationDetailsWithConnections(currentSSHConn, s.wgClient); err != nil {
+					util.LogError(i18n.T("wireguard_registration_failed", map[string]any{
+						"type":  "proxy",
+						"Error": err,
+					}), err)
+				}
+				return
+			}
+
+			util.Debug(fmt.Sprintf("[proxy] SSH connection not available, retrying in 100ms (attempt %d/5)", attempt+1))
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		util.LogError(i18n.T("wireguard_registration_timeout", map[string]any{
+			"type": "proxy",
+		}), nil)
+	}()
+
+	// Start proxy handler
 	if s.cancelFunc != nil {
 		s.cancelFunc()
 	}
 
-	monitorCtx, cancelFunc := context.WithCancel(ctx)
+	proxyCtx, cancelFunc := context.WithCancel(ctx)
 	s.cancelFunc = cancelFunc
 
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		s.createBackendConnections(monitorCtx)
-	}()
-
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		s.poolMaintenance(monitorCtx)
+		s.handleTunnelRequests(proxyCtx)
 	}()
 }
 
-func (s *ProxyService) poolMaintenance(ctx context.Context) {
-	s.connPool.CleanIdleConnections()
+func (s *ProxyService) sendRegistrationDetailsWithConnections(sshConn transport.Connection, wgClient *WireGuardClient) error {
+	util.Debug("[proxy] sendRegistrationDetailsWithConnections() called")
 
-	ticker := time.NewTicker(2 * time.Second)
+	if sshConn == nil || wgClient == nil {
+		util.Debug(i18n.T("wireguard_registration_missing_connections", map[string]any{
+			"type":      "proxy",
+			"HasSSH":    sshConn != nil,
+			"HasClient": wgClient != nil,
+		}))
+		return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_registration_no_connection", map[string]any{}), nil)
+	}
+
+	util.Debug(i18n.T("wireguard_registration_connections_ok", map[string]any{
+		"type": "proxy",
+	}))
+
+	// Get the public key from the WireGuard config
+	s.connectionMu.RLock()
+	publicKey := ""
+	if s.wgConfig != nil {
+		publicKey = s.wgConfig.PublicKey
+	}
+	s.connectionMu.RUnlock()
+
+	registrationPayload := struct {
+		Type      string `json:"type"`
+		Status    string `json:"status"`
+		ClientIP  string `json:"client_ip,omitempty"`
+		PublicKey string `json:"public_key,omitempty"`
+	}{
+		Type:      "wireguard_registration",
+		Status:    "connected",
+		PublicKey: publicKey,
+	}
+
+	util.Debug(i18n.T("wireguard_registration_getting_client_ip", map[string]any{
+		"type": "proxy",
+	}))
+
+	// Use configured tunnel IP
+	if tunnelIP := wgClient.GetTunnelIP(); tunnelIP != "" {
+		registrationPayload.ClientIP = tunnelIP
+		util.Debug(i18n.T("wireguard_client_ip_obtained", map[string]any{
+			"type":     "proxy",
+			"ClientIP": tunnelIP,
+		}))
+	} else {
+		// Fallback to extracting IP from allowedIPs
+		if clientIP, err := wgClient.getClientIP(); err == nil {
+			registrationPayload.ClientIP = clientIP
+			util.Debug(i18n.T("wireguard_client_ip_fallback", map[string]any{
+				"type":     "proxy",
+				"ClientIP": clientIP,
+			}))
+		} else {
+			util.Debug(i18n.T("wireguard_client_ip_failed", map[string]any{
+				"type":  "proxy",
+				"Error": err,
+			}))
+		}
+	}
+
+	util.Debug(i18n.T("wireguard_registration_payload_sending", map[string]any{
+		"type":      "proxy",
+		"Status":    registrationPayload.Status,
+		"ClientIP":  registrationPayload.ClientIP,
+		"PublicKey": registrationPayload.PublicKey[:16] + "...",
+	}))
+
+	util.Debug(i18n.T("wireguard_registration_ssh_sending", map[string]any{
+		"type": "proxy",
+	}))
+
+	if err := sshConn.SendPayload(registrationPayload); err != nil {
+		util.Debug(i18n.T("wireguard_registration_ssh_failed", map[string]any{
+			"type":  "proxy",
+			"Error": err,
+		}))
+		return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_registration_send_failed", map[string]any{"Error": err}), err)
+	}
+
+	util.Debug(i18n.T("wireguard_registration_ssh_success", map[string]any{
+		"type": "proxy",
+	}))
+
+	util.Info(i18n.T("wireguard_registration_sent", map[string]any{
+		"type": "proxy",
+	}))
+
+	return nil
+}
+
+func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
+	util.Debug(i18n.T("wireguard_tunnel_handler_started", map[string]any{
+		"type": "proxy",
+	}))
+
+	// Get application configuration
+	appConfig := s.config.Application
+	localAddr := fmt.Sprintf("%s:%d", appConfig.IP, appConfig.Port)
+
+	util.Debug(i18n.T("wireguard_tunnel_forwarding_setup", map[string]any{
+		"type":      "proxy",
+		"LocalAddr": localAddr,
+	}))
+
+	// Set up listener on WireGuard tunnel network
+	s.connectionMu.RLock()
+	wgClient := s.wgClient
+	s.connectionMu.RUnlock()
+
+	if wgClient == nil {
+		util.LogError(i18n.T("wireguard_tunnel_no_client", map[string]any{
+			"type": "proxy",
+		}), nil)
+		return
+	}
+
+	// Listen for incoming connections on the tunnel network
+	listener, err := wgClient.Listen("tcp", ":"+strconv.Itoa(appConfig.Port))
+	if err != nil {
+		util.LogError(i18n.T("wireguard_tunnel_listen_failed", map[string]any{
+			"type":  "proxy",
+			"Error": err,
+		}), err)
+		return
+	}
+	defer func() { _ = listener.Close() }()
+
+	util.Info(i18n.T("wireguard_tunnel_listener_started", map[string]any{
+		"type": "proxy",
+		"Port": appConfig.Port,
+	}))
+
+	// Accept connections in a goroutine
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					util.LogError(i18n.T("wireguard_tunnel_accept_failed", map[string]any{
+						"type":  "proxy",
+						"Error": err,
+					}), err)
+					continue
+				}
+			}
+
+			// Handle each connection in a separate goroutine
+			go s.handleTunnelConnection(ctx, conn, localAddr)
+		}
+	}()
+
+	// Keep the handler alive and monitor connection health
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
+			util.Debug(i18n.T("wireguard_tunnel_handler_stopped", map[string]any{
+				"type": "proxy",
+			}))
 			return
 		case <-ticker.C:
-			s.connPool.CleanIdleConnections()
-		}
-	}
-}
+			s.connectionMu.RLock()
+			isRunning := s.wgClient != nil && s.wgClient.IsRunning()
+			s.connectionMu.RUnlock()
 
-func (s *ProxyService) createBackendConnections(ctx context.Context) {
-	s.backendConnsMu.Lock()
-	s.backendConns = make([]net.Conn, 0, poolSize)
-
-	for range poolSize {
-		conn, err := s.createBackendConnection()
-		if err != nil {
-			s.bus.Publish(event.Event{
-				Type: event.ConnectionFailed,
-				Data: err,
-				Ctx:  ctx,
-			})
-			continue
-		}
-		s.backendConns = append(s.backendConns, conn)
-
-		s.wg.Add(1)
-		go func(backendConn net.Conn, connIndex int) {
-			defer s.wg.Done()
-			s.handleBackendConnection(ctx, backendConn, connIndex)
-		}(conn, len(s.backendConns)-1)
-	}
-	s.backendConnsMu.Unlock()
-
-	maintenanceTicker := time.NewTicker(10 * time.Second)
-	keepAliveTicker := time.NewTicker(30 * time.Second)
-	defer maintenanceTicker.Stop()
-	defer keepAliveTicker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-maintenanceTicker.C:
-			s.maintainBackendConnections(ctx)
-		case <-keepAliveTicker.C:
-			s.keepAliveBackendConnections()
-		}
-	}
-}
-
-func (s *ProxyService) createBackendConnection() (net.Conn, error) {
-	cfg := s.GetConfig()
-	backendAddr := net.JoinHostPort(cfg.Connection.Host, "9090")
-
-	util.Info(i18n.T("proxy_backend_connecting", map[string]any{
-		"type":    "proxy",
-		"Address": backendAddr,
-	}))
-
-	dialer := &net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-
-	tlsConn, err := tls.DialWithDialer(dialer, "tcp", backendAddr, &tls.Config{
-		InsecureSkipVerify: true,
-	})
-	if err != nil {
-		util.Warn(i18n.T("proxy_backend_connection_failed", map[string]any{
-			"type":    "proxy",
-			"Address": backendAddr,
-			"Error":   err,
-		}))
-		return nil, err
-	}
-
-	util.Info(i18n.T("proxy_backend_connection_established", map[string]any{
-		"type":    "proxy",
-		"Address": backendAddr,
-	}))
-
-	if tcpConn, ok := tlsConn.NetConn().(*net.TCPConn); ok {
-		_ = tcpConn.SetKeepAlive(true)
-		_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
-	}
-
-	return tlsConn, nil
-}
-
-func (s *ProxyService) keepAliveBackendConnections() {
-	s.backendConnsMu.Lock()
-	defer s.backendConnsMu.Unlock()
-
-	for _, conn := range s.backendConns {
-		if conn != nil {
-			_ = conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
-			_, _ = conn.Write([]byte{0})
-			_ = conn.SetWriteDeadline(time.Time{})
-		}
-	}
-}
-
-func (s *ProxyService) maintainBackendConnections(ctx context.Context) {
-	s.backendConnsMu.Lock()
-	defer s.backendConnsMu.Unlock()
-
-	for i, conn := range s.backendConns {
-		if conn == nil || s.isConnectionBroken(conn) {
-			if conn != nil {
-				util.Debug(i18n.T("proxy_backend_connection_closing", map[string]any{
-					"type":  "proxy",
-					"Index": i,
+			if !isRunning {
+				util.Warn(i18n.T("wireguard_connection_lost", map[string]any{
+					"type": "proxy",
 				}))
-				_ = conn.Close()
-			}
-			newConn, err := s.createBackendConnection()
-			if err == nil {
-				s.backendConns[i] = newConn
-
-				s.wg.Add(1)
-				go func(backendConn net.Conn, connIndex int) {
-					defer s.wg.Done()
-					s.handleBackendConnection(ctx, backendConn, connIndex)
-				}(newConn, i)
-			} else {
-				util.Warn(i18n.T("proxy_backend_connection_replacement_failed", map[string]any{
-					"type":  "proxy",
-					"Index": i,
-					"Error": err,
-				}))
-				s.backendConns[i] = nil
-			}
-		}
-	}
-}
-
-func (s *ProxyService) isConnectionBroken(conn net.Conn) bool {
-	if conn == nil {
-		return true
-	}
-
-	_ = conn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
-	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
-
-	buffer := make([]byte, 1)
-	_, err := conn.Read(buffer)
-
-	if err == nil {
-		return false
-	}
-
-	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-		return false
-	}
-
-	return true
-}
-
-func (s *ProxyService) closeBackendConnections() {
-	s.backendConnsMu.Lock()
-	defer s.backendConnsMu.Unlock()
-
-	util.Info(i18n.T("proxy_backend_connections_closing", map[string]any{
-		"type":  "proxy",
-		"Count": len(s.backendConns),
-	}))
-
-	for i, conn := range s.backendConns {
-		if conn != nil {
-			util.Debug(i18n.T("proxy_backend_connection_closing", map[string]any{
-				"type":  "proxy",
-				"Index": i,
-			}))
-			_ = conn.Close()
-		}
-	}
-	s.backendConns = nil
-}
-
-func (s *ProxyService) createLocalConnection(cfg config.Config) (net.Conn, error) {
-	useTLS := false
-	if val, ok := cfg.Application.Security["tls"]; ok {
-		useTLS = val
-	}
-
-	ip := "127.0.0.1"
-	if cfg.Application.IP != "" {
-		ip = cfg.Application.IP
-	}
-
-	localAddr := net.JoinHostPort(ip, fmt.Sprintf("%d", cfg.Application.Port))
-
-	util.Debug(i18n.T("proxy_local_connecting", map[string]any{
-		"type":    "proxy",
-		"Address": localAddr,
-		"TLS":     useTLS,
-	}))
-
-	dialer := &net.Dialer{
-		Timeout: connTimeout,
-	}
-
-	var conn net.Conn
-	var err error
-
-	if useTLS {
-		conn, err = tls.DialWithDialer(dialer, "tcp", localAddr, &tls.Config{
-			InsecureSkipVerify: true, // This is a local connection
-		})
-	} else {
-		conn, err = dialer.Dial("tcp", localAddr)
-	}
-
-	if err != nil {
-		util.Warn(i18n.T("proxy_local_connection_failed", map[string]any{
-			"type":    "proxy",
-			"Address": localAddr,
-			"TLS":     useTLS,
-			"Error":   err,
-		}))
-		return nil, err
-	}
-
-	util.Debug(i18n.T("proxy_local_connection_established", map[string]any{
-		"type":    "proxy",
-		"Address": localAddr,
-		"TLS":     useTLS,
-	}))
-
-	return conn, nil
-}
-
-func (s *ProxyService) handleBackendConnection(ctx context.Context, backendConn net.Conn, connIndex int) {
-	cfg := s.GetConfig()
-
-	util.Debug(i18n.T("proxy_backend_handler_starting", map[string]any{
-		"type":  "proxy",
-		"Index": connIndex,
-	}))
-
-	defer func() {
-		util.Debug(i18n.T("proxy_backend_handler_stopping", map[string]any{
-			"type":  "proxy",
-			"Index": connIndex,
-		}))
-	}()
-
-	buffer := make([]byte, 4096)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			_ = backendConn.SetReadDeadline(time.Now().Add(5 * time.Second))
-
-			n, err := backendConn.Read(buffer)
-			if err != nil {
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					continue // Timeout is expected, continue monitoring
-				}
-				util.Debug(i18n.T("proxy_backend_read_error", map[string]any{
-					"type":  "proxy",
-					"Index": connIndex,
-					"Error": err,
-				}))
+				s.bus.Publish(event.Event{Type: event.WireGuardDisconnected, Ctx: ctx})
 				return
-			}
-
-			if n > 0 {
-				// Handle request: get local connection, send data, get response, send back
-				s.wg.Add(1)
-				go func(data []byte) {
-					defer s.wg.Done()
-					s.handleSimpleRequest(ctx, backendConn, connIndex, data, cfg)
-				}(buffer[:n])
+			} else {
+				util.Debug(i18n.T("wireguard_connection_alive", map[string]any{
+					"type": "proxy",
+				}))
 			}
 		}
 	}
 }
 
-func (s *ProxyService) handleSimpleRequest(ctx context.Context, backendConn net.Conn, connIndex int, requestData []byte, cfg config.Config) {
-	util.Debug(i18n.T("proxy_request_handling_starting", map[string]any{
-		"type":  "proxy",
-		"Index": connIndex,
+func (s *ProxyService) handleTunnelConnection(ctx context.Context, tunnelConn net.Conn, localAddr string) {
+	defer func() { _ = tunnelConn.Close() }()
+
+	util.Debug(i18n.T("wireguard_tunnel_connection_accepted", map[string]any{
+		"type":       "proxy",
+		"RemoteAddr": tunnelConn.RemoteAddr().String(),
 	}))
 
-	defer func() {
-		util.Debug(i18n.T("proxy_request_handling_stopping", map[string]any{
-			"type":  "proxy",
-			"Index": connIndex,
-		}))
-	}()
-
-	// Get a fresh local connection for this request
-	localConn, poolIdx := s.connPool.GetConnection(cfg)
-	if localConn == nil {
-		util.Warn(i18n.T("proxy_local_connection_failed_for_data", map[string]any{
-			"type":  "proxy",
-			"Index": connIndex,
-		}))
+	// Connect to local application
+	localConn, err := net.Dial("tcp", localAddr)
+	if err != nil {
+		util.LogError(i18n.T("wireguard_tunnel_forward_failed", map[string]any{
+			"type":      "proxy",
+			"LocalAddr": localAddr,
+			"Error":     err,
+		}), err)
 		return
 	}
-	defer s.connPool.ReleaseConnection(poolIdx)
 	defer func() { _ = localConn.Close() }()
 
-	_, err := localConn.Write(requestData)
-	if err != nil {
-		util.Warn(i18n.T("proxy_initial_data_write_failed", map[string]any{
+	util.Debug(i18n.T("wireguard_tunnel_forward_started", map[string]any{
+		"type":      "proxy",
+		"LocalAddr": localAddr,
+	}))
+
+	// Use errgroup for coordinated bidirectional forwarding
+	g, gCtx := errgroup.WithContext(ctx)
+
+	// Forward from tunnel to local application
+	g.Go(func() error {
+		defer func() { _ = localConn.Close() }()
+		_, err := io.Copy(localConn, tunnelConn)
+		return err
+	})
+
+	// Forward from local application to tunnel
+	g.Go(func() error {
+		defer func() { _ = tunnelConn.Close() }()
+		_, err := io.Copy(tunnelConn, localConn)
+		return err
+	})
+
+	// Wait for either direction to finish or fail
+	<-gCtx.Done()
+	// Context cancelled, set deadlines to force cleanup
+	_ = tunnelConn.SetDeadline(time.Now().Add(time.Second))
+	_ = localConn.SetDeadline(time.Now().Add(time.Second))
+
+	// Wait for all goroutines to finish
+	if err := g.Wait(); err != nil {
+		util.Debug(i18n.T("wireguard_tunnel_proxy_error", map[string]any{
 			"type":  "proxy",
-			"Index": connIndex,
 			"Error": err,
-		}))
-		return
-	}
-
-	if tcpConn, ok := localConn.(*net.TCPConn); ok {
-		_ = tcpConn.SetNoDelay(true)
-	}
-
-	responseBuffer := make([]byte, 64*1024)
-	var response []byte
-
-	// Set shorter read timeout to avoid backend connection issues
-	_ = localConn.SetReadDeadline(time.Now().Add(5 * time.Second))
-
-	for {
-		n, err := localConn.Read(responseBuffer)
-		if err != nil {
-			if err == io.EOF {
-				break // Normal end of response
-			}
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				break // Timeout is normal for HTTP keep-alive
-			}
-			util.Debug(i18n.T("proxy_local_response_read_error", map[string]any{
-				"type":  "proxy",
-				"Index": connIndex,
-				"Error": err,
-			}))
-			break
-		}
-
-		if n > 0 {
-			response = append(response, responseBuffer[:n]...)
-			// Reset deadline for additional data
-			_ = localConn.SetReadDeadline(time.Now().Add(1 * time.Second))
-		}
-	}
-
-	if len(response) > 0 {
-		_, err = backendConn.Write(response)
-		if err != nil {
-			util.Warn(i18n.T("proxy_response_write_failed", map[string]any{
-				"type":  "proxy",
-				"Index": connIndex,
-				"Error": err,
-			}))
-			return
-		}
-
-		if tcpConn, ok := backendConn.(*net.TCPConn); ok {
-			_ = tcpConn.SetNoDelay(true)
-		}
-
-		util.Debug(i18n.T("proxy_response_sent", map[string]any{
-			"type":  "proxy",
-			"Index": connIndex,
-			"Size":  len(response),
 		}))
 	}
 }

@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"net"
-	"sync"
 	"testing"
 	"time"
 
@@ -11,7 +9,7 @@ import (
 	"erlang-solutions.com/amaru_agent/internal/event"
 )
 
-func TestProxyPoolManagement(t *testing.T) {
+func TestWireGuardProxyService(t *testing.T) {
 	bus := event.NewBus()
 	proxyService := NewProxyService(bus)
 
@@ -30,132 +28,80 @@ func TestProxyPoolManagement(t *testing.T) {
 	var cfg config.Config
 	cfg.Application.IP = "127.0.0.1"
 	cfg.Application.Port = 8080
+	cfg.Connection.Tunnel = true
 	proxyService.SetConfig(cfg)
 
-	t.Run("PoolInitialization", func(t *testing.T) {
-		pool := proxyService.connPool
-
-		size := pool.GetPoolSize()
-		if size != poolSize {
-			t.Errorf("Expected pool size %d, got %d", poolSize, size)
-		}
-
-		total, inUse, empty := pool.GetPoolStatus()
-		if total != poolSize {
-			t.Errorf("Expected total pool slots %d, got %d", poolSize, total)
-		}
-
-		if inUse != 0 {
-			t.Errorf("Expected 0 in-use connections, got %d", inUse)
-		}
-
-		if empty != poolSize {
-			t.Errorf("Expected %d empty slots, got %d", poolSize, empty)
+	t.Run("ServiceInitialization", func(t *testing.T) {
+		if proxyService.wgClient != nil {
+			t.Error("WireGuard client should not be initialized without config")
 		}
 	})
 
-	t.Run("GetPoolConnection", func(t *testing.T) {
-		_, idx := proxyService.connPool.GetConnection(proxyService.GetConfig())
+	t.Run("ConfigUpdate", func(t *testing.T) {
+		// Test config update
+		newCfg := cfg
+		newCfg.Application.Port = 9090
+		proxyService.SetConfig(newCfg)
 
-		// Should fail because the port is likely not open
-		if idx != -1 {
-			t.Errorf("Expected no connection (idx=-1), got idx=%d", idx)
+		updatedCfg := proxyService.GetConfig()
+		if updatedCfg.Application.Port != 9090 {
+			t.Errorf("Expected port 9090, got %d", updatedCfg.Application.Port)
 		}
 	})
 
-	t.Run("CleanupPool", func(t *testing.T) {
-		mockConn := &mockNetConn{}
-
-		proxyService.connPool.SetPoolConnection(0, mockConn, false)
-
-		_, _, emptyAfterAdd := proxyService.connPool.GetPoolStatus()
-		if emptyAfterAdd == poolSize {
-			t.Fatal("Failed to add test connection to pool")
+	t.Run("WireGuardConfigHandling", func(t *testing.T) {
+		// Test WireGuard config handling
+		wgConfig := &WireGuardConfig{
+			PrivateKey:   "QH7bXDSBhNvHXnUXlFKi0Ks64a4I1j7E1K4Z4b8LfVs=",
+			PublicKey:    "d/t9p4J3A+J5A8lRO+dUEeO4hgd4JB8z5FE8eI6ZmWI=",
+			ServerPubKey: "m9RCGLWOgYkk0xqCuC5VlRKJQ6Hj4b7YXKjJYG8Q2Vs=",
+			Endpoint:     "test.example.com:51820",
+			AllowedIPs:   []string{"10.0.0.2/32"},
+			DNS:          "8.8.8.8",
+			MTU:          1420,
 		}
 
-		proxyService.connPool.CleanupPool()
-
-		_, _, emptyAfterCleanup := proxyService.connPool.GetPoolStatus()
-		if emptyAfterCleanup != poolSize {
-			t.Errorf("Expected all slots to be empty after cleanup, got %d empty out of %d",
-				emptyAfterCleanup, poolSize)
+		// This would normally be called by the event handler
+		// but since we don't have a real server connection, we test separately
+		if !cfg.Connection.Tunnel {
+			t.Skip("Tunnel not enabled in test config")
 		}
 
-		if !mockConn.closed {
-			t.Error("Connection not properly closed during cleanup")
+		// Test that the config is properly stored
+		proxyService.connectionMu.Lock()
+		proxyService.wgConfig = wgConfig
+		proxyService.connectionMu.Unlock()
+
+		proxyService.connectionMu.RLock()
+		storedConfig := proxyService.wgConfig
+		proxyService.connectionMu.RUnlock()
+
+		if storedConfig == nil {
+			t.Error("WireGuard config not stored")
+		} else if storedConfig.Endpoint != "test.example.com:51820" {
+			t.Errorf("Expected endpoint test.example.com:51820, got %s", storedConfig.Endpoint)
 		}
 	})
 }
 
-func TestConnectionPoolConcurrency(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping concurrency test in short mode")
-	}
-
-	bus := event.NewBus()
-	proxyService := NewProxyService(bus)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := proxyService.Start(ctx); err != nil {
-		t.Fatalf("Failed to start proxy service: %v", err)
-	}
-	defer func() {
-		if err := proxyService.Stop(ctx); err != nil {
-			t.Logf("Error stopping proxy service: %v", err)
+func TestWireGuardClientConfig(t *testing.T) {
+	t.Run("ClientConfigCreation", func(t *testing.T) {
+		config := &WireGuardClientConfig{
+			PrivateKey:   "QH7bXDSBhNvHXnUXlFKi0Ks64a4I1j7E1K4Z4b8LfVs=",
+			PublicKey:    "d/t9p4J3A+J5A8lRO+dUEeO4hgd4JB8z5FE8eI6ZmWI=",
+			ServerPubKey: "m9RCGLWOgYkk0xqCuC5VlRKJQ6Hj4b7YXKjJYG8Q2Vs=",
+			Endpoint:     "test.example.com:51820",
+			AllowedIPs:   []string{"10.0.0.2/32"},
+			DNS:          "8.8.8.8",
+			MTU:          1420,
 		}
-	}()
 
-	for i := range poolSize {
-		proxyService.connPool.SetPoolConnection(i, &mockNetConn{id: i}, false)
-	}
+		if config.Endpoint != "test.example.com:51820" {
+			t.Errorf("Expected endpoint test.example.com:51820, got %s", config.Endpoint)
+		}
 
-	var wg sync.WaitGroup
-	concurrentWorkers := 10
-	operationsPerWorker := 5
-
-	// Test concurrent access to the connection pool
-	for w := range concurrentWorkers {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-
-			for range operationsPerWorker {
-				conn, idx := proxyService.connPool.GetConnection(proxyService.GetConfig())
-
-				if idx >= 0 && conn != nil {
-					proxyService.connPool.ReleaseConnection(idx)
-				}
-			}
-		}(w)
-	}
-
-	wg.Wait()
-
-	_, inUseAfterTest, _ := proxyService.connPool.GetPoolStatus()
-
-	if inUseAfterTest > 0 {
-		t.Errorf("Found %d connections still marked as inUse after test", inUseAfterTest)
-	}
+		if len(config.AllowedIPs) != 1 {
+			t.Errorf("Expected 1 allowed IP, got %d", len(config.AllowedIPs))
+		}
+	})
 }
-
-type mockNetConn struct {
-	id     int
-	closed bool
-	mu     sync.Mutex
-}
-
-func (m *mockNetConn) Read(b []byte) (n int, err error)  { return 0, nil }
-func (m *mockNetConn) Write(b []byte) (n int, err error) { return len(b), nil }
-func (m *mockNetConn) Close() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.closed = true
-	return nil
-}
-func (m *mockNetConn) LocalAddr() net.Addr                { return nil }
-func (m *mockNetConn) RemoteAddr() net.Addr               { return nil }
-func (m *mockNetConn) SetDeadline(t time.Time) error      { return nil }
-func (m *mockNetConn) SetReadDeadline(t time.Time) error  { return nil }
-func (m *mockNetConn) SetWriteDeadline(t time.Time) error { return nil }

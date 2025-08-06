@@ -2,12 +2,12 @@
 host = "localhost"
 port = 28961
 timeout = "30s"
-keyfile = "/Users/ricardolanziano/.ssh/id_ed25519"
+keyfile = "/path/to/ssh/priv.key"
 tunnel = true
 
 [application]
-port = 4000
-hostname = "example.com"
+port = 9000
+hostname = "test.example.com"
 ip = "127.0.0.1"
 [application.tags]
 service = "pto"
@@ -20,5 +20,5 @@ tls = false
 mtls = false
 
 [logging]
-level = "info"
-logfile = "/Users/ricardolanziano/amaru_agent.log"
+level = "debug"
+logfile = "/path/to/amaru_agent.log"

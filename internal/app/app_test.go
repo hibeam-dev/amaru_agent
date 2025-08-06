@@ -184,6 +184,7 @@ func TestNewApp(t *testing.T) {
 
 	if app == nil {
 		t.Fatal("Expected app to be non-nil")
+		return
 	}
 
 	components := map[string]any{

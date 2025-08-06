@@ -6,3 +6,4 @@
 *.swp
 *.swo
 .DS_Store
+config.*.toml
