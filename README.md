@@ -28,6 +28,16 @@ make build
 
 The binary will be available in the `bin/` directory.
 
+### Installation
+
+```bash
+# Install to $GOPATH/bin (requires GOPATH to be set)
+make install
+
+# Uninstall from system
+make uninstall
+```
+
 ## Development
 
 ```bash
@@ -45,6 +55,14 @@ go install go.uber.org/mock/mockgen@latest
 # Build and test
 make build
 make test
+
+# Hot reload development
+make dev                           # Uses default config.toml
+make dev CONFIG=config.prod.toml   # Uses custom config
+make dev CONFIG=config.staging.toml
+
+# Show all available make targets
+make help
 ```
 
 ### Project Structure
@@ -70,12 +88,19 @@ make test
 ### Make Commands
 
 ```bash
-make        # Build application
-make test   # Run tests
-make cover  # Test coverage stats
-make lint   # Run linter
-make fmt    # Format code
-make clean  # Clean artifacts
+make help       # Show all available targets with descriptions
+make build      # Build application
+make install    # Install to $GOPATH/bin
+make uninstall  # Remove from $GOPATH/bin
+make test       # Run tests
+make cover      # Test coverage stats
+make cover-html # Generate HTML coverage report
+make lint       # Run linter
+make fmt        # Format code
+make mocks      # Generate interface mocks
+make vendor     # Tidy and verify dependencies
+make dev        # Hot reload development (requires CONFIG=file.toml)
+make clean      # Clean artifacts
 ```
 
 ## Usage
