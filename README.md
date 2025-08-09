@@ -167,7 +167,7 @@ The agent maintains a persistent and reliable connection to the remote server:
 - **Automatic reconnection**: Implements exponential backoff when connections fail
 - **Connection health monitoring**: Actively checks connection health
 - **Graceful recovery**: Handles network interruptions seamlessly
-- **TCP/TLS tunneling**: Proxies traffic between local applications and remote services with optional TLS support
+- **Wireguard tunneling**: Proxies traffic between local applications and remote services
 
 ### Design Principles
 
@@ -193,6 +193,7 @@ make mocks
 
 - `github.com/BurntSushi/toml` - TOML configuration
 - `golang.org/x/crypto/ssh` - Connection functionality
+- `golang.zx2c4.com/wireguard` - Tunneling capabilities
 - `github.com/nicksnyder/go-i18n/v2` - Internationalization
 - `golang.org/x/text` - Language detection
 - `github.com/maniartech/signals` - Event handling system
