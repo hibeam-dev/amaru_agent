@@ -1,24 +1,26 @@
 [connection]
-host = "localhost"
+host = "agents.amaru.cloud"
 port = 28961
 timeout = "30s"
 keyfile = "/path/to/ssh/priv.key"
 tunnel = true
 
 [application]
-port = 9000
+port = 8080
 hostname = "test.example.com"
 ip = "127.0.0.1"
+
 [application.tags]
-service = "pto"
+service = "application"
 version = "v1.2.3"
 environment = "production"
 region = "us-east-1"
 tier = "backend"
+
 [application.security]
 tls = false
 mtls = false
 
 [logging]
 level = "debug"
-logfile = "/path/to/amaru_agent.log"
+logfile = "/path/to/logs/amaru_agent.log"
