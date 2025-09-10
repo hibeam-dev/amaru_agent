@@ -22,4 +22,4 @@ mtls = false
 
 [logging]
 level = "debug"
-logfile = "/path/to/logs/amaru_agent.log"
+# logfile = "/path/to/logs/amaru_agent.log"  # Optional: defaults to OS-specific location

@@ -43,7 +43,6 @@ func WithTimeout(timeout time.Duration) Option {
 	}
 }
 
-
 func DefaultOptions() ConnectionOptions {
 	return ConnectionOptions{
 		Protocol: DefaultProtocol,

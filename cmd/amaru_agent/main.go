@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"erlang-solutions.com/amaru_agent/internal/app"
 	"erlang-solutions.com/amaru_agent/internal/config"
@@ -36,6 +37,11 @@ func setupLogging(cfg config.Config) error {
 	logLevel := util.ParseLogLevel(cfg.Logging.Level)
 
 	if cfg.Logging.LogFile != "" {
+		logDir := filepath.Dir(cfg.Logging.LogFile)
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			return fmt.Errorf("failed to create log directory: %w", err)
+		}
+
 		logFile, err := os.OpenFile(cfg.Logging.LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			return fmt.Errorf("failed to open log file: %w", err)
