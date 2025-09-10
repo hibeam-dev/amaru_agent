@@ -115,6 +115,9 @@ make clean      # Clean artifacts
 # Use Spanish language
 LANG=es_ES.UTF-8 ./bin/amaru_agent
 
+# Generate SSH key pair
+./bin/amaru_agent -genkey > server_public_key.txt
+
 # Run in background
 nohup ./bin/amaru_agent -pid > /dev/null 2>&1 &
 ```
@@ -122,6 +125,7 @@ nohup ./bin/amaru_agent -pid > /dev/null 2>&1 &
 ### Command-line Options
 
 - `-config`: Config file path (default: config.toml)
+- `-genkey`: Generate SSH key pair and exit (keys stored in OS-specific location, existing keys backed up)
 - `-pid`: Write PID to ~/.amaru_agent/amaru_agent.pid
 
 ### Signal Handling
@@ -136,7 +140,10 @@ nohup ./bin/amaru_agent -pid > /dev/null 2>&1 &
 host = "localhost"       # Server hostname
 port = 22000             # Server port
 timeout = "30s"          # Connection timeout
-keyfile = "/path/to/key" # Private key path
+keyfile = "/path/to/key" # Private key path (optional: defaults to OS-specific location)
+                         # Windows: %LOCALAPPDATA%\amaru\amaru_agent.key
+                         # macOS: ~/Library/Application Support/amaru/amaru_agent.key
+                         # Linux: ~/.local/share/amaru/amaru_agent.key
 
 [application]
 port = 8080              # Local application port

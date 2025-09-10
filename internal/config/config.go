@@ -61,6 +61,41 @@ func getDefaultLogFile() string {
 	}
 }
 
+func getDefaultKeyFile() string {
+	switch runtime.GOOS {
+	case "windows":
+		localAppData := os.Getenv("LOCALAPPDATA")
+		if localAppData == "" {
+			localAppData = os.Getenv("APPDATA")
+		}
+		if localAppData != "" {
+			return filepath.Join(localAppData, "amaru", "amaru_agent.key")
+		}
+		homeDir, _ := os.UserHomeDir()
+		return filepath.Join(homeDir, "amaru_agent_key")
+	case "darwin":
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			return filepath.Join(homeDir, "Library", "Application Support", "amaru", "amaru_agent.key")
+		}
+		return filepath.Join(os.TempDir(), "amaru_agent.key")
+	default:
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			xdgDataHome := os.Getenv("XDG_DATA_HOME")
+			if xdgDataHome != "" {
+				return filepath.Join(xdgDataHome, "amaru", "amaru_agent.key")
+			}
+			return filepath.Join(homeDir, ".local", "share", "amaru", "amaru_agent.key")
+		}
+		return filepath.Join(os.TempDir(), "amaru_agent.key")
+	}
+}
+
+func DefaultKeyFile() string {
+	return getDefaultKeyFile()
+}
+
 func Load(path string) (Config, error) {
 	var config Config
 
@@ -80,7 +115,11 @@ func Load(path string) (Config, error) {
 		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_host_missing", map[string]any{}), nil)
 	}
 	if config.Connection.KeyFile == "" {
-		return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_keyfile_missing", map[string]any{}), nil)
+		defaultKeyFile := getDefaultKeyFile()
+		if _, err := os.Stat(defaultKeyFile); os.IsNotExist(err) {
+			return config, util.WrapWithBase(util.ErrConfigLoad, i18n.T("connection_keyfile_missing", map[string]any{}), nil)
+		}
+		config.Connection.KeyFile = defaultKeyFile
 	}
 
 	return config, nil

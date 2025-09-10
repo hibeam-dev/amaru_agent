@@ -282,6 +282,12 @@ other = "Write PID file to ~/.amaru_agent/amaru_agent.pid"
 [flag_config_desc]
 other = "Path to TOML configuration file (default: config.toml)"
 
+[flag_genkey_desc]
+other = "Generate SSH key pair and exit"
+
+[genkey_error]
+other = "Failed to generate SSH key pair: {{.Error}}"
+
 # Configuration validation messages
 [connection_host_missing]
 other = "Connection host not specified"
@@ -552,3 +558,31 @@ other = "Getting WireGuard client IP address"
 
 [wireguard_registration_timeout]
 other = "WireGuard registration timed out - SSH connection never became available"
+
+# SSH Key Generation
+[keygen_key_dir_create_error]
+other = "Failed to create key directory: {{.Error}}"
+
+[keygen_backup_error]
+other = "Failed to backup existing keys: {{.Error}}"
+
+[keygen_key_generate_error]
+other = "Failed to generate Ed25519 key: {{.Error}}"
+
+[keygen_private_key_marshal_error]
+other = "Failed to marshal private key: {{.Error}}"
+
+[keygen_ssh_public_key_error]
+other = "Failed to create SSH public key: {{.Error}}"
+
+[keygen_private_key_write_error]
+other = "Failed to write private key: {{.Error}}"
+
+[keygen_public_key_write_error]
+other = "Failed to write public key: {{.Error}}"
+
+[keygen_private_key_backup_error]
+other = "Failed to backup private key: {{.Error}}"
+
+[keygen_public_key_backup_error]
+other = "Failed to backup public key: {{.Error}}"
