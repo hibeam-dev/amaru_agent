@@ -156,7 +156,7 @@ mtls = false
 
 [logging]
 level = "info"           # Log level
-logfile = "/path/to/log" # Log file path
+logfile = "/path/to/log" # Log file path (optional: defaults to OS-specific location)
 ```
 
 ## Architecture

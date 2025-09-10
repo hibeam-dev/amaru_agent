@@ -2,6 +2,8 @@ package config
 
 import (
 	"os"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -76,5 +78,96 @@ level = "debug"
 	}
 	if cfg.Logging.Level != "debug" {
 		t.Errorf("Expected Logging.Level to be 'debug', got '%s'", cfg.Logging.Level)
+	}
+
+	if cfg.Logging.LogFile == "" {
+		t.Error("Expected Logging.LogFile to be set to default, got empty string")
+	}
+
+	if !strings.Contains(cfg.Logging.LogFile, "amaru_agent.log") {
+		t.Errorf("Expected default log file to contain 'amaru_agent.log', got '%s'", cfg.Logging.LogFile)
+	}
+}
+
+func TestDefaultLogFile(t *testing.T) {
+	tests := []struct {
+		name string
+		goos string
+		want string
+	}{
+		{
+			name: "Windows with LOCALAPPDATA",
+			goos: "windows",
+			want: "amaru_agent.log",
+		},
+		{
+			name: "macOS",
+			goos: "darwin",
+			want: "amaru_agent.log",
+		},
+		{
+			name: "Linux",
+			goos: "linux",
+			want: "amaru_agent.log",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originalGOOS := runtime.GOOS
+
+			// We can't easily mock runtime.GOOS in unit tests, so we just
+			// verify the function returns a non-empty path with the right filename
+			defaultPath := getDefaultLogFile()
+
+			if defaultPath == "" {
+				t.Error("Expected getDefaultLogFile() to return non-empty path")
+			}
+
+			if !strings.Contains(defaultPath, tt.want) {
+				t.Errorf("Expected default log file path to contain '%s', got '%s'", tt.want, defaultPath)
+			}
+
+			_ = originalGOOS // Prevent unused variable warning
+		})
+	}
+}
+
+func TestConfigWithExplicitLogFile(t *testing.T) {
+	tempFile, err := os.CreateTemp("", "config-*.toml")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer func() {
+		if err := os.Remove(tempFile.Name()); err != nil {
+			t.Logf("Failed to remove temp file: %v", err)
+		}
+	}()
+
+	configContent := `
+[connection]
+host = "test-host"
+port = 2222
+keyfile = "/path/to/key"
+
+[logging]
+level = "info"
+logfile = "/custom/path/to/logs/custom.log"
+`
+	if _, err := tempFile.Write([]byte(configContent)); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	if err := tempFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
+
+	cfg, err := Load(tempFile.Name())
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	expectedLogFile := "/custom/path/to/logs/custom.log"
+	if cfg.Logging.LogFile != expectedLogFile {
+		t.Errorf("Expected Logging.LogFile to be '%s', got '%s'", expectedLogFile, cfg.Logging.LogFile)
 	}
 }

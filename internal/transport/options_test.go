@@ -55,7 +55,6 @@ func TestWithTimeout(t *testing.T) {
 	}
 }
 
-
 func TestDefaultOptions(t *testing.T) {
 	opts := DefaultOptions()
 
