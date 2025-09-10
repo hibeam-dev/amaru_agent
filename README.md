@@ -1,6 +1,6 @@
 # Amaru Agent
 
-Go reference implementation of the agent component for the Amaru reverse-TCP
+Go reference implementation of the agent component for the Amaru
 proxy system.
 
 ## Features
@@ -137,7 +137,6 @@ host = "localhost"       # Server hostname
 port = 22000             # Server port
 timeout = "30s"          # Connection timeout
 keyfile = "/path/to/key" # Private key path
-tunnel = true            # Enable TCP tunneling
 
 [application]
 port = 8080              # Local application port

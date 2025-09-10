@@ -3,7 +3,6 @@ host = "agents.amaru.cloud"
 port = 28961
 timeout = "30s"
 keyfile = "/path/to/ssh/priv.key"
-tunnel = true
 
 [application]
 port = 8080

@@ -24,21 +24,16 @@ func TestConnectionService(t *testing.T) {
 		}
 	})
 
-	t.Run("TunnelConfiguration", func(t *testing.T) {
+	t.Run("BasicConfiguration", func(t *testing.T) {
 		bus := event.NewBus()
 		svc := NewConnectionService(bus)
 
 		var cfg config.Config
-		cfg.Connection.Tunnel = true
 		cfg.Application.Security = map[string]bool{"tls": true}
 
 		svc.SetConfig(cfg)
 
 		retrievedCfg := svc.GetConfig()
-		if !retrievedCfg.Connection.Tunnel {
-			t.Error("Tunnel flag should be true in the config")
-		}
-
 		if !retrievedCfg.Application.Security["tls"] {
 			t.Error("TLS flag should be true in the config")
 		}

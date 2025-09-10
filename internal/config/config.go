@@ -15,7 +15,6 @@ type Config struct {
 		Timeout    time.Duration
 		KeyFile    string
 		KnownHosts string `toml:",omitempty"`
-		Tunnel     bool
 	}
 	Application struct {
 		Hostname string

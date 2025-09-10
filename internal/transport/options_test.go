@@ -55,15 +55,6 @@ func TestWithTimeout(t *testing.T) {
 	}
 }
 
-func TestWithTunnel(t *testing.T) {
-	opt := WithTunnel(true)
-	opts := DefaultOptions()
-	opt(&opts)
-
-	if !opts.Tunnel {
-		t.Errorf("Expected tunnel to be true")
-	}
-}
 
 func TestDefaultOptions(t *testing.T) {
 	opts := DefaultOptions()
@@ -75,10 +66,6 @@ func TestDefaultOptions(t *testing.T) {
 	if opts.Timeout != 30*time.Second {
 		t.Errorf("Expected timeout to be 30s, got %v", opts.Timeout)
 	}
-
-	if opts.Tunnel {
-		t.Errorf("Expected tunnel to be false by default")
-	}
 }
 
 func TestApplyOptions(t *testing.T) {
@@ -88,7 +75,6 @@ func TestApplyOptions(t *testing.T) {
 		WithPort(8080),
 		WithKeyFile("/path/to/key.pem"),
 		WithTimeout(10*time.Second),
-		WithTunnel(true),
 	)
 
 	if opts.Protocol != "custom" {
@@ -109,10 +95,6 @@ func TestApplyOptions(t *testing.T) {
 
 	if opts.Timeout != 10*time.Second {
 		t.Errorf("Expected timeout to be 10s, got %v", opts.Timeout)
-	}
-
-	if !opts.Tunnel {
-		t.Errorf("Expected tunnel to be true")
 	}
 }
 

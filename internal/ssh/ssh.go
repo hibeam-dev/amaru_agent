@@ -42,7 +42,6 @@ func (c *sshCreator) CreateConnection(ctx context.Context, config config.Config,
 		Port:     config.Connection.Port,
 		KeyFile:  config.Connection.KeyFile,
 		Timeout:  config.Connection.Timeout,
-		Tunnel:   config.Connection.Tunnel,
 	}
 
 	// Override with options if provided
