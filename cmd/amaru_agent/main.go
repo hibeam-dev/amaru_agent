@@ -13,12 +13,14 @@ import (
 	"erlang-solutions.com/amaru_agent/internal/event"
 	"erlang-solutions.com/amaru_agent/internal/i18n"
 	"erlang-solutions.com/amaru_agent/internal/registry"
+	"erlang-solutions.com/amaru_agent/internal/transport"
 	"erlang-solutions.com/amaru_agent/internal/util"
 )
 
 var (
 	writePid   = flag.Bool("pid", false, "")
 	configFile = flag.String("config", "config.toml", "")
+	genKey     = flag.Bool("genkey", false, "")
 )
 
 func init() {
@@ -30,6 +32,7 @@ func init() {
 
 		_, _ = fmt.Fprintf(w, "  -pid\n    \t%s\n", i18n.T("flag_pid_desc", map[string]any{}))
 		_, _ = fmt.Fprintf(w, "  -config %s\n    \t%s\n", "filename", i18n.T("flag_config_desc", map[string]any{}))
+		_, _ = fmt.Fprintf(w, "  -genkey\n    \t%s\n", i18n.T("flag_genkey_desc", map[string]any{}))
 	}
 }
 
@@ -65,6 +68,18 @@ func main() {
 	registry.InitTransports()
 
 	flag.Parse()
+
+	if *genKey {
+		generator := transport.NewEd25519Generator()
+		keyPath := config.DefaultKeyFile()
+		keyPair, err := generator.GenerateKey(keyPath)
+		if err != nil {
+			util.Error(i18n.T("genkey_error", map[string]any{"Error": err}))
+			os.Exit(1)
+		}
+		fmt.Print(string(keyPair.PublicKey))
+		os.Exit(0)
+	}
 
 	if *writePid {
 		if err := daemon.WritePidFile(); err != nil {

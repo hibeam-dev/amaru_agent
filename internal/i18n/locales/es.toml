@@ -30,7 +30,7 @@ other = "Reconexión fallida: {{.Error}}. Se volverá a intentar en {{.Delay}}."
 [reconnection_successful]
 other = "Reconexión exitosa."
 
-[immediate_reconnect_failed] 
+[immediate_reconnect_failed]
 other = "Reconexión inmediata fallida: {{.Error}}"
 
 [immediate_reconnect_successful]
@@ -275,6 +275,12 @@ other = "Escribir archivo PID en ~/.amaru_agent/amaru_agent.pid"
 
 [flag_config_desc]
 other = "Ruta al archivo de configuración TOML (predeterminado: config.toml)"
+
+[flag_genkey_desc]
+other = "Generar par de claves SSH y salir"
+
+[genkey_error]
+other = "Error al generar el par de claves SSH: {{.Error}}"
 
 # Configuration validation messages
 [connection_host_missing]
@@ -546,3 +552,31 @@ other = "Obteniendo dirección IP del cliente WireGuard"
 
 [wireguard_registration_timeout]
 other = "Timeout de registro WireGuard - conexión SSH nunca estuvo disponible"
+
+# SSH Key Generation
+[keygen_key_dir_create_error]
+other = "Error al crear el directorio de claves: {{.Error}}"
+
+[keygen_backup_error]
+other = "Error al hacer respaldo de las claves existentes: {{.Error}}"
+
+[keygen_key_generate_error]
+other = "Error al generar la clave Ed25519: {{.Error}}"
+
+[keygen_private_key_marshal_error]
+other = "Error al serializar la clave privada: {{.Error}}"
+
+[keygen_ssh_public_key_error]
+other = "Error al crear la clave pública SSH: {{.Error}}"
+
+[keygen_private_key_write_error]
+other = "Error al escribir la clave privada: {{.Error}}"
+
+[keygen_public_key_write_error]
+other = "Error al escribir la clave pública: {{.Error}}"
+
+[keygen_private_key_backup_error]
+other = "Error al hacer respaldo de la clave privada: {{.Error}}"
+
+[keygen_public_key_backup_error]
+other = "Error al hacer respaldo de la clave pública: {{.Error}}"
