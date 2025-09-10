@@ -127,14 +127,6 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 }
 
 func (s *ProxyService) handleWireGuardConfig(ctx context.Context, wgConfig *WireGuardConfig) {
-	cfg := s.GetConfig()
-	if !cfg.Connection.Tunnel {
-		util.Debug(i18n.T("wireguard_config_skipped_no_tunnel", map[string]any{
-			"type": "proxy",
-		}))
-		return
-	}
-
 	util.Debug(i18n.T("wireguard_config_received", map[string]any{
 		"type":      "proxy",
 		"Endpoint":  wgConfig.Endpoint,

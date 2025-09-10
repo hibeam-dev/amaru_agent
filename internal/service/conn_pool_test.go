@@ -28,7 +28,6 @@ func TestWireGuardProxyService(t *testing.T) {
 	var cfg config.Config
 	cfg.Application.IP = "127.0.0.1"
 	cfg.Application.Port = 8080
-	cfg.Connection.Tunnel = true
 	proxyService.SetConfig(cfg)
 
 	t.Run("ServiceInitialization", func(t *testing.T) {
@@ -63,9 +62,6 @@ func TestWireGuardProxyService(t *testing.T) {
 
 		// This would normally be called by the event handler
 		// but since we don't have a real server connection, we test separately
-		if !cfg.Connection.Tunnel {
-			t.Skip("Tunnel not enabled in test config")
-		}
 
 		// Test that the config is properly stored
 		proxyService.connectionMu.Lock()

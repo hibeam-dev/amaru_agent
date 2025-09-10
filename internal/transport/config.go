@@ -15,5 +15,4 @@ type ApplicationConfig struct {
 	IP       string            `json:"ip,omitempty"`
 	Tags     map[string]string `json:"tags"`
 	Security map[string]bool   `json:"security"`
-	Tunnel   bool              `json:"tunnel"`
 }

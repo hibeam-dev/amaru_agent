@@ -84,7 +84,6 @@ func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) erro
 		transport.WithPort(cfg.Connection.Port),
 		transport.WithKeyFile(cfg.Connection.KeyFile),
 		transport.WithTimeout(cfg.Connection.Timeout),
-		transport.WithTunnel(cfg.Connection.Tunnel),
 	)
 	if err != nil {
 		s.bus.Publish(event.Event{Type: event.ConnectionFailed, Data: err, Ctx: ctx})
@@ -197,7 +196,6 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 			IP:       cfg.Application.IP,
 			Tags:     cfg.Application.Tags,
 			Security: cfg.Application.Security,
-			Tunnel:   cfg.Connection.Tunnel,
 		},
 	}
 
@@ -205,31 +203,29 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 		return util.NewError(util.ErrTypeConnection, i18n.T("config_send_error", map[string]any{"Error": err}), err)
 	}
 
-	// If tunneling is enabled, expect WireGuard config response
-	if cfg.Connection.Tunnel {
-		util.Debug(i18n.T("wireguard_config_awaiting", map[string]any{
-			"type": "connection",
-		}))
+	// Always expect WireGuard config response
+	util.Debug(i18n.T("wireguard_config_awaiting", map[string]any{
+		"type": "connection",
+	}))
 
-		wgConfig, err := s.receiveWireGuardConfigWithTimeout(conn, 60*time.Second)
-		if err != nil {
-			return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_error", map[string]any{"Error": err}), err)
-		}
-
-		util.Debug(i18n.T("wireguard_config_parsed", map[string]any{
-			"type":      "connection",
-			"Endpoint":  wgConfig.Endpoint,
-			"IP":        wgConfig.TunnelIP,
-			"PublicKey": wgConfig.PublicKey[:16] + "...",
-		}))
-
-		// Store WireGuard config for proxy service
-		s.bus.Publish(event.Event{
-			Type: event.WireGuardConfigReceived,
-			Data: wgConfig,
-			Ctx:  s.Context(),
-		})
+	wgConfig, err := s.receiveWireGuardConfigWithTimeout(conn, 60*time.Second)
+	if err != nil {
+		return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_error", map[string]any{"Error": err}), err)
 	}
+
+	util.Debug(i18n.T("wireguard_config_parsed", map[string]any{
+		"type":      "connection",
+		"Endpoint":  wgConfig.Endpoint,
+		"IP":        wgConfig.TunnelIP,
+		"PublicKey": wgConfig.PublicKey[:16] + "...",
+	}))
+
+	// Store WireGuard config for proxy service
+	s.bus.Publish(event.Event{
+		Type: event.WireGuardConfigReceived,
+		Data: wgConfig,
+		Ctx:  s.Context(),
+	})
 
 	return nil
 }
