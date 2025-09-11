@@ -279,8 +279,36 @@ other = "Ruta al archivo de configuración TOML (predeterminado: config.toml)"
 [flag_genkey_desc]
 other = "Generar par de claves SSH y salir"
 
+[flag_register_desc]
+other = "Registrar clave pública SSH con el servidor backend usando token (predeterminado: app.amaru.cloud)"
+
+[flag_key_desc]
+other = "Ruta personalizada de archivo de clave SSH para registro (por defecto usa el sistema predeterminado)"
+
 [genkey_error]
 other = "Error al generar el par de claves SSH: {{.Error}}"
+
+
+[register_key_read_error]
+other = "Error al leer la clave pública SSH: {{.Error}}"
+
+[register_json_error]
+other = "Error al codificar los datos de registro: {{.Error}}"
+
+[register_request_error]
+other = "Error al enviar la solicitud de registro: {{.Error}}"
+
+[register_response_read_error]
+other = "Error al leer la respuesta de registro: {{.Error}}"
+
+[register_response_error]
+other = "Error de registro con estado {{.StatusCode}}: {{.Body}}"
+
+[register_error]
+other = "Error en el registro: {{.Error}}"
+
+[register_success]
+other = "Clave SSH registrada exitosamente"
 
 # Configuration validation messages
 [connection_host_missing]

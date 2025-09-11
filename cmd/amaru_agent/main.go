@@ -12,15 +12,18 @@ import (
 	"erlang-solutions.com/amaru_agent/internal/daemon"
 	"erlang-solutions.com/amaru_agent/internal/event"
 	"erlang-solutions.com/amaru_agent/internal/i18n"
+	"erlang-solutions.com/amaru_agent/internal/register"
 	"erlang-solutions.com/amaru_agent/internal/registry"
 	"erlang-solutions.com/amaru_agent/internal/transport"
 	"erlang-solutions.com/amaru_agent/internal/util"
 )
 
 var (
-	writePid   = flag.Bool("pid", false, "")
-	configFile = flag.String("config", "config.toml", "")
-	genKey     = flag.Bool("genkey", false, "")
+	writePid     = flag.Bool("pid", false, "")
+	configFile   = flag.String("config", "config.toml", "")
+	genKey       = flag.Bool("genkey", false, "")
+	registerFlag = flag.String("register", "", "")
+	keyFile      = flag.String("key", "", "")
 )
 
 func init() {
@@ -33,6 +36,8 @@ func init() {
 		_, _ = fmt.Fprintf(w, "  -pid\n    \t%s\n", i18n.T("flag_pid_desc", map[string]any{}))
 		_, _ = fmt.Fprintf(w, "  -config %s\n    \t%s\n", "filename", i18n.T("flag_config_desc", map[string]any{}))
 		_, _ = fmt.Fprintf(w, "  -genkey\n    \t%s\n", i18n.T("flag_genkey_desc", map[string]any{}))
+		_, _ = fmt.Fprintf(w, "  -register %s\n    \t%s\n", "token", i18n.T("flag_register_desc", map[string]any{}))
+		_, _ = fmt.Fprintf(w, "  -key %s\n    \t%s\n", "filepath", i18n.T("flag_key_desc", map[string]any{}))
 	}
 }
 
@@ -78,6 +83,29 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Print(string(keyPair.PublicKey))
+		os.Exit(0)
+	}
+
+	if *registerFlag != "" {
+		backendHost := os.Getenv("AMARU_BACKEND")
+		if backendHost == "" {
+			backendHost = "https://app.amaru.cloud"
+		}
+
+		var keyPath string
+		if *keyFile != "" {
+			keyPath = *keyFile
+		} else {
+			keyPath = config.DefaultKeyFile() + ".pub"
+		}
+
+		registerClient := register.NewClient()
+		if err := registerClient.RegisterWithBackend(*registerFlag, keyPath, backendHost); err != nil {
+			util.Error(i18n.T("register_error", map[string]any{"Error": err}))
+			os.Exit(1)
+		}
+
+		util.Info(i18n.T("register_success", map[string]any{}))
 		os.Exit(0)
 	}
 
