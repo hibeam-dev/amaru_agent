@@ -285,8 +285,36 @@ other = "Path to TOML configuration file (default: config.toml)"
 [flag_genkey_desc]
 other = "Generate SSH key pair and exit"
 
+[flag_register_desc]
+other = "Register public SSH key with backend server using token (default: app.amaru.cloud)"
+
+[flag_key_desc]
+other = "Custom SSH key file path for registration (default uses system default)"
+
 [genkey_error]
 other = "Failed to generate SSH key pair: {{.Error}}"
+
+
+[register_key_read_error]
+other = "Failed to read SSH public key: {{.Error}}"
+
+[register_json_error]
+other = "Failed to encode registration data: {{.Error}}"
+
+[register_request_error]
+other = "Failed to send registration request: {{.Error}}"
+
+[register_response_read_error]
+other = "Failed to read registration response: {{.Error}}"
+
+[register_response_error]
+other = "Registration failed with status {{.StatusCode}}: {{.Body}}"
+
+[register_error]
+other = "Registration failed: {{.Error}}"
+
+[register_success]
+other = "SSH key registered successfully"
 
 # Configuration validation messages
 [connection_host_missing]
