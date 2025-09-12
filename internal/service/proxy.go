@@ -98,7 +98,6 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 			s.connectionMu.Lock()
 			s.sshConn = conn
 			s.connectionMu.Unlock()
-			util.Debug("[proxy] SSH connection stored")
 		}
 
 	case event.ConnectionClosed:
@@ -120,8 +119,6 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 	case event.WireGuardConfigReceived:
 		if wgConfig, ok := evt.Data.(*WireGuardConfig); ok {
 			s.handleWireGuardConfig(s.Context(), wgConfig)
-		} else {
-			util.Debug("[proxy] WireGuardConfigReceived event with invalid data type")
 		}
 	}
 }
@@ -131,7 +128,7 @@ func (s *ProxyService) handleWireGuardConfig(ctx context.Context, wgConfig *Wire
 		"type":      "proxy",
 		"Endpoint":  wgConfig.Endpoint,
 		"PublicKey": wgConfig.PublicKey[:16] + "...",
-	}))
+	}), map[string]any{"component": "proxy"})
 
 	s.connectionMu.Lock()
 	defer s.connectionMu.Unlock()
@@ -139,7 +136,7 @@ func (s *ProxyService) handleWireGuardConfig(ctx context.Context, wgConfig *Wire
 	if s.wgClient != nil {
 		util.Debug(i18n.T("wireguard_client_stopping_existing", map[string]any{
 			"type": "proxy",
-		}))
+		}), map[string]any{"component": "proxy"})
 		_ = s.wgClient.Stop()
 	}
 
@@ -162,27 +159,27 @@ func (s *ProxyService) handleWireGuardConfig(ctx context.Context, wgConfig *Wire
 		"ListenPort": clientConfig.ListenPort,
 		"MTU":        clientConfig.MTU,
 		"TunnelIP":   clientConfig.TunnelIP,
-	}))
+	}), map[string]any{"component": "proxy"})
 
 	wgClient, err := NewWireGuardClient(clientConfig)
 	if err != nil {
 		util.LogError(i18n.T("wireguard_client_creation_failed", map[string]any{
 			"type":  "proxy",
 			"Error": err,
-		}), err)
+		}), err, map[string]any{"component": "proxy"})
 		s.bus.Publish(event.Event{Type: event.ProxyFailed, Data: err, Ctx: ctx})
 		return
 	}
 
 	util.Debug(i18n.T("wireguard_client_starting", map[string]any{
 		"type": "proxy",
-	}))
+	}), map[string]any{"component": "proxy"})
 
 	if err := wgClient.Start(); err != nil {
 		util.LogError(i18n.T("wireguard_client_start_failed", map[string]any{
 			"type":  "proxy",
 			"Error": err,
-		}), err)
+		}), err, map[string]any{"component": "proxy"})
 		s.bus.Publish(event.Event{Type: event.ProxyFailed, Data: err, Ctx: ctx})
 		return
 	}
@@ -192,41 +189,38 @@ func (s *ProxyService) handleWireGuardConfig(ctx context.Context, wgConfig *Wire
 
 	util.Info(i18n.T("wireguard_client_established", map[string]any{
 		"type": "proxy",
-	}))
+	}), map[string]any{"component": "proxy"})
 
 	s.bus.Publish(event.Event{Type: event.WireGuardConnected, Ctx: ctx})
 
 	util.Debug(i18n.T("wireguard_registration_sending", map[string]any{
 		"type": "proxy",
-	}))
+	}), map[string]any{"component": "proxy"})
 
 	go func() {
-		for attempt := range 5 {
+		for range 5 {
 			s.connectionMu.RLock()
 			currentSSHConn := s.sshConn
 			s.connectionMu.RUnlock()
 
 			if currentSSHConn != nil {
-				util.Debug(fmt.Sprintf("[proxy] SSH connection available on attempt %d", attempt+1))
 				if err := s.sendRegistrationDetailsWithConnections(currentSSHConn, s.wgClient); err != nil {
 					util.LogError(i18n.T("wireguard_registration_failed", map[string]any{
 						"type":  "proxy",
 						"Error": err,
-					}), err)
+					}), err, map[string]any{"component": "proxy"})
 				}
 				return
 			}
 
-			util.Debug(fmt.Sprintf("[proxy] SSH connection not available, retrying in 100ms (attempt %d/5)", attempt+1))
 			time.Sleep(100 * time.Millisecond)
 		}
 
 		util.LogError(i18n.T("wireguard_registration_timeout", map[string]any{
 			"type": "proxy",
-		}), nil)
+		}), nil, map[string]any{"component": "proxy"})
 	}()
 
-	// Start proxy handler
 	if s.cancelFunc != nil {
 		s.cancelFunc()
 	}
@@ -242,22 +236,15 @@ func (s *ProxyService) handleWireGuardConfig(ctx context.Context, wgConfig *Wire
 }
 
 func (s *ProxyService) sendRegistrationDetailsWithConnections(sshConn transport.Connection, wgClient *WireGuardClient) error {
-	util.Debug("[proxy] sendRegistrationDetailsWithConnections() called")
-
 	if sshConn == nil || wgClient == nil {
 		util.Debug(i18n.T("wireguard_registration_missing_connections", map[string]any{
 			"type":      "proxy",
 			"HasSSH":    sshConn != nil,
 			"HasClient": wgClient != nil,
-		}))
+		}), map[string]any{"component": "proxy"})
 		return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_registration_no_connection", map[string]any{}), nil)
 	}
 
-	util.Debug(i18n.T("wireguard_registration_connections_ok", map[string]any{
-		"type": "proxy",
-	}))
-
-	// Get the public key from the WireGuard config
 	s.connectionMu.RLock()
 	publicKey := ""
 	if s.wgConfig != nil {
@@ -276,17 +263,9 @@ func (s *ProxyService) sendRegistrationDetailsWithConnections(sshConn transport.
 		PublicKey: publicKey,
 	}
 
-	util.Debug(i18n.T("wireguard_registration_getting_client_ip", map[string]any{
-		"type": "proxy",
-	}))
-
 	// Use configured tunnel IP
 	if tunnelIP := wgClient.GetTunnelIP(); tunnelIP != "" {
 		registrationPayload.ClientIP = tunnelIP
-		util.Debug(i18n.T("wireguard_client_ip_obtained", map[string]any{
-			"type":     "proxy",
-			"ClientIP": tunnelIP,
-		}))
 	} else {
 		// Fallback to extracting IP from allowedIPs
 		if clientIP, err := wgClient.getClientIP(); err == nil {
@@ -294,12 +273,12 @@ func (s *ProxyService) sendRegistrationDetailsWithConnections(sshConn transport.
 			util.Debug(i18n.T("wireguard_client_ip_fallback", map[string]any{
 				"type":     "proxy",
 				"ClientIP": clientIP,
-			}))
+			}), map[string]any{"component": "proxy"})
 		} else {
 			util.Debug(i18n.T("wireguard_client_ip_failed", map[string]any{
 				"type":  "proxy",
 				"Error": err,
-			}))
+			}), map[string]any{"component": "proxy"})
 		}
 	}
 
@@ -307,28 +286,20 @@ func (s *ProxyService) sendRegistrationDetailsWithConnections(sshConn transport.
 		"type":      "proxy",
 		"Status":    registrationPayload.Status,
 		"ClientIP":  registrationPayload.ClientIP,
-		"PublicKey": registrationPayload.PublicKey[:16] + "...",
-	}))
-
-	util.Debug(i18n.T("wireguard_registration_ssh_sending", map[string]any{
-		"type": "proxy",
-	}))
+		"PublicKey": registrationPayload.PublicKey,
+	}), map[string]any{"component": "proxy"})
 
 	if err := sshConn.SendPayload(registrationPayload); err != nil {
 		util.Debug(i18n.T("wireguard_registration_ssh_failed", map[string]any{
 			"type":  "proxy",
 			"Error": err,
-		}))
+		}), map[string]any{"component": "proxy"})
 		return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_registration_send_failed", map[string]any{"Error": err}), err)
 	}
 
-	util.Debug(i18n.T("wireguard_registration_ssh_success", map[string]any{
-		"type": "proxy",
-	}))
-
 	util.Info(i18n.T("wireguard_registration_sent", map[string]any{
 		"type": "proxy",
-	}))
+	}), map[string]any{"component": "proxy"})
 
 	return nil
 }
@@ -336,16 +307,15 @@ func (s *ProxyService) sendRegistrationDetailsWithConnections(sshConn transport.
 func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 	util.Debug(i18n.T("wireguard_tunnel_handler_started", map[string]any{
 		"type": "proxy",
-	}))
+	}), map[string]any{"component": "proxy"})
 
-	// Get application configuration
 	appConfig := s.config.Application
 	localAddr := fmt.Sprintf("%s:%d", appConfig.IP, appConfig.Port)
 
 	util.Debug(i18n.T("wireguard_tunnel_forwarding_setup", map[string]any{
 		"type":      "proxy",
 		"LocalAddr": localAddr,
-	}))
+	}), map[string]any{"component": "proxy"})
 
 	// Set up listener on WireGuard tunnel network
 	s.connectionMu.RLock()
@@ -355,7 +325,7 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 	if wgClient == nil {
 		util.LogError(i18n.T("wireguard_tunnel_no_client", map[string]any{
 			"type": "proxy",
-		}), nil)
+		}), nil, map[string]any{"component": "proxy"})
 		return
 	}
 
@@ -365,7 +335,7 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 		util.LogError(i18n.T("wireguard_tunnel_listen_failed", map[string]any{
 			"type":  "proxy",
 			"Error": err,
-		}), err)
+		}), err, map[string]any{"component": "proxy"})
 		return
 	}
 	defer func() { _ = listener.Close() }()
@@ -373,7 +343,7 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 	util.Info(i18n.T("wireguard_tunnel_listener_started", map[string]any{
 		"type": "proxy",
 		"Port": appConfig.Port,
-	}))
+	}), map[string]any{"component": "proxy"})
 
 	// Accept connections in a goroutine
 	go func() {
@@ -387,7 +357,7 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 					util.LogError(i18n.T("wireguard_tunnel_accept_failed", map[string]any{
 						"type":  "proxy",
 						"Error": err,
-					}), err)
+					}), err, map[string]any{"component": "proxy"})
 					continue
 				}
 			}
@@ -406,7 +376,7 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 		case <-ctx.Done():
 			util.Debug(i18n.T("wireguard_tunnel_handler_stopped", map[string]any{
 				"type": "proxy",
-			}))
+			}), map[string]any{"component": "proxy"})
 			return
 		case <-ticker.C:
 			s.connectionMu.RLock()
@@ -416,13 +386,13 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 			if !isRunning {
 				util.Warn(i18n.T("wireguard_connection_lost", map[string]any{
 					"type": "proxy",
-				}))
+				}), map[string]any{"component": "proxy"})
 				s.bus.Publish(event.Event{Type: event.WireGuardDisconnected, Ctx: ctx})
 				return
 			} else {
 				util.Debug(i18n.T("wireguard_connection_alive", map[string]any{
 					"type": "proxy",
-				}))
+				}), map[string]any{"component": "proxy"})
 			}
 		}
 	}
@@ -434,7 +404,7 @@ func (s *ProxyService) handleTunnelConnection(ctx context.Context, tunnelConn ne
 	util.Debug(i18n.T("wireguard_tunnel_connection_accepted", map[string]any{
 		"type":       "proxy",
 		"RemoteAddr": tunnelConn.RemoteAddr().String(),
-	}))
+	}), map[string]any{"component": "proxy"})
 
 	// Connect to local application
 	localConn, err := net.Dial("tcp", localAddr)
@@ -443,7 +413,7 @@ func (s *ProxyService) handleTunnelConnection(ctx context.Context, tunnelConn ne
 			"type":      "proxy",
 			"LocalAddr": localAddr,
 			"Error":     err,
-		}), err)
+		}), err, map[string]any{"component": "proxy"})
 		return
 	}
 	defer func() { _ = localConn.Close() }()
@@ -451,7 +421,7 @@ func (s *ProxyService) handleTunnelConnection(ctx context.Context, tunnelConn ne
 	util.Debug(i18n.T("wireguard_tunnel_forward_started", map[string]any{
 		"type":      "proxy",
 		"LocalAddr": localAddr,
-	}))
+	}), map[string]any{"component": "proxy"})
 
 	// Use errgroup for coordinated bidirectional forwarding
 	g, gCtx := errgroup.WithContext(ctx)
@@ -470,7 +440,6 @@ func (s *ProxyService) handleTunnelConnection(ctx context.Context, tunnelConn ne
 		return err
 	})
 
-	// Wait for either direction to finish or fail
 	<-gCtx.Done()
 	// Context cancelled, set deadlines to force cleanup
 	_ = tunnelConn.SetDeadline(time.Now().Add(time.Second))
@@ -481,6 +450,6 @@ func (s *ProxyService) handleTunnelConnection(ctx context.Context, tunnelConn ne
 		util.Debug(i18n.T("wireguard_tunnel_proxy_error", map[string]any{
 			"type":  "proxy",
 			"Error": err,
-		}))
+		}), map[string]any{"component": "proxy"})
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"net"
 	"net/netip"
 	"sync"
@@ -100,10 +99,6 @@ func (c *WireGuardClient) Start() error {
 	}
 
 	tunnelIP := c.tunnelIP
-	util.Debug(i18n.T("wireguard_client_tunnel_ip_debug", map[string]any{
-		"type":     "wireguard",
-		"TunnelIP": tunnelIP,
-	}))
 	if tunnelIP == "" {
 		var err error
 		tunnelIP, err = c.getClientIP()
@@ -113,7 +108,7 @@ func (c *WireGuardClient) Start() error {
 		util.Debug(i18n.T("wireguard_client_fallback_ip_debug", map[string]any{
 			"type":       "wireguard",
 			"FallbackIP": tunnelIP,
-		}))
+		}), map[string]any{"component": "wireguard"})
 	}
 
 	tun, tnet, err := netstack.CreateNetTUN(
@@ -128,11 +123,15 @@ func (c *WireGuardClient) Start() error {
 	c.tunDevice = tun
 	c.tun = tnet
 
-	// Create WireGuard device logger
-	logger := device.NewLogger(
-		device.LogLevelVerbose,
-		"wireguard-client: ",
-	)
+	logWriter := util.NewWireGuardLogWriter(util.DefaultLogger, "wireguard-client: ")
+	logger := &device.Logger{
+		Verbosef: func(format string, args ...any) {
+			_, _ = fmt.Fprintf(logWriter, format, args...)
+		},
+		Errorf: func(format string, args ...any) {
+			_, _ = fmt.Fprintf(logWriter, "ERROR: "+format, args...)
+		},
+	}
 
 	c.device = device.NewDevice(tun, conn.NewDefaultBind(), logger)
 
@@ -150,12 +149,6 @@ func (c *WireGuardClient) Start() error {
 	for _, ip := range c.allowedIPs {
 		config += fmt.Sprintf("allowed_ip=%s\n", ip)
 	}
-
-	util.Debug(i18n.T("wireguard_config_debug", map[string]any{
-		"type":     "wireguard",
-		"Config":   config,
-		"Endpoint": c.endpoint,
-	}))
 
 	err = c.device.IpcSet(config)
 	if err != nil {
@@ -175,7 +168,7 @@ func (c *WireGuardClient) Start() error {
 		"type":     "wireguard",
 		"ClientIP": tunnelIP,
 		"Endpoint": c.endpoint,
-	}))
+	}), map[string]any{"component": "wireguard"})
 
 	return nil
 }
@@ -201,7 +194,7 @@ func (c *WireGuardClient) Stop() error {
 
 	util.Info(i18n.T("wireguard_client_stopped", map[string]any{
 		"type": "wireguard",
-	}))
+	}), map[string]any{"component": "wireguard"})
 
 	return nil
 }
@@ -280,7 +273,7 @@ func parseKey(keyStr string) (wgtypes.Key, error) {
 func keyToHex(key wgtypes.Key) string {
 	decoded, err := base64.StdEncoding.DecodeString(key.String())
 	if err != nil {
-		log.Printf("Error decoding base64 key: %v", err)
+		util.Error("Error decoding base64 key", map[string]any{"component": "wireguard", "error": err})
 		return ""
 	}
 	return hex.EncodeToString(decoded)

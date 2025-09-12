@@ -90,17 +90,13 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 		"type": "ssh",
 		"Host": opts.Host,
 		"Port": opts.Port,
-	}))
+	}), map[string]any{"component": "ssh"})
 
 	client, err := ssh.Dial("tcp", addr, sshConfig)
 	if err != nil {
 		return nil, util.NewError(util.ErrTypeConnection,
 			i18n.T("ssh_connect_failed", map[string]any{"Address": addr}), err)
 	}
-
-	util.Info(i18n.T("ssh_connection_established", map[string]any{
-		"type": "ssh",
-	}))
 
 	cleanup := func(closables ...io.Closer) {
 		for _, c := range closables {
@@ -117,11 +113,6 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 		return nil, util.NewError(util.ErrTypeSession, i18n.T("ssh_session_failed", map[string]any{}), err)
 	}
 
-	util.Debug(i18n.T("ssh_subsystem_requesting", map[string]any{
-		"type":      "ssh",
-		"Subsystem": Subsystem,
-	}))
-
 	if err = session.RequestSubsystem(Subsystem); err != nil {
 		cleanup(session, client)
 		return nil, util.NewError(util.ErrTypeSubsystem,
@@ -131,7 +122,7 @@ func connectWithOptions(ctx context.Context, opts transport.ConnectionOptions) (
 	util.Debug(i18n.T("ssh_subsystem_established", map[string]any{
 		"type":      "ssh",
 		"Subsystem": Subsystem,
-	}))
+	}), map[string]any{"component": "ssh"})
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
@@ -211,7 +202,7 @@ func (c *Conn) SendPayload(payload any) error {
 		"type":        "ssh",
 		"PayloadSize": len(data),
 		"PayloadType": fmt.Sprintf("%T", payload),
-	}))
+	}), map[string]any{"component": "ssh"})
 
 	data = append(data, '\n')
 	_, err = c.stdin.Write(data)
@@ -220,17 +211,17 @@ func (c *Conn) SendPayload(payload any) error {
 		util.Debug(i18n.T("ssh_payload_send_failed", map[string]any{
 			"type":  "ssh",
 			"Error": err,
-		}))
+		}), map[string]any{"component": "ssh"})
 		// Check if this is an EOF or connection closed error
 		if err.Error() == "EOF" || err.Error() == "io: read/write on closed pipe" {
 			util.Debug(i18n.T("ssh_connection_closed_during_send", map[string]any{
 				"type": "ssh",
-			}))
+			}), map[string]any{"component": "ssh"})
 		}
 	} else {
 		util.Debug(i18n.T("ssh_payload_sent", map[string]any{
 			"type": "ssh",
-		}))
+		}), map[string]any{"component": "ssh"})
 	}
 
 	return err
@@ -246,7 +237,6 @@ func (c *Conn) CheckHealth(ctx context.Context) error {
 
 	testSession, err := c.client.NewSession()
 	if err != nil {
-		// SSH connection is broken - most likely due to network issues
 		return util.NewError(util.ErrTypeConnection,
 			i18n.T("connection_health_check_failed", map[string]any{"Error": err}), err)
 	}

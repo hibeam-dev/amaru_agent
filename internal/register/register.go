@@ -45,7 +45,7 @@ func (c *client) RegisterWithBackend(token string, publicKeyPath string, backend
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			util.Warn("Failed to close response body", "error", closeErr)
+			util.Warn("Failed to close response body", map[string]any{"component": "api", "error": closeErr})
 		}
 	}()
 

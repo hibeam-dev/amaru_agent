@@ -67,7 +67,7 @@ func main() {
 
 	if err := i18n.InitDefaultFS(); err != nil {
 		// Can't use i18n.T here since i18n init failed
-		util.Warn("Warning: Failed to initialize localization", "error", err)
+		util.Warn("Failed to initialize localization", map[string]any{"component": "main", "error": err})
 	}
 
 	registry.InitTransports()
@@ -79,7 +79,7 @@ func main() {
 		keyPath := config.DefaultKeyFile()
 		keyPair, err := generator.GenerateKey(keyPath)
 		if err != nil {
-			util.Error(i18n.T("genkey_error", map[string]any{"Error": err}))
+			util.Error(i18n.T("genkey_error", map[string]any{"Error": err}), map[string]any{"component": "main"})
 			os.Exit(1)
 		}
 		fmt.Print(string(keyPair.PublicKey))
@@ -101,17 +101,17 @@ func main() {
 
 		registerClient := register.NewClient()
 		if err := registerClient.RegisterWithBackend(*registerFlag, keyPath, backendHost); err != nil {
-			util.Error(i18n.T("register_error", map[string]any{"Error": err}))
+			util.Error(i18n.T("register_error", map[string]any{"Error": err}), map[string]any{"component": "main"})
 			os.Exit(1)
 		}
 
-		util.Info(i18n.T("register_success", map[string]any{}))
+		util.Info(i18n.T("register_success", map[string]any{}), map[string]any{"component": "main"})
 		os.Exit(0)
 	}
 
 	if *writePid {
 		if err := daemon.WritePidFile(); err != nil {
-			util.Error(i18n.T("pid_file_error", map[string]any{"Error": err}))
+			util.Error(i18n.T("pid_file_error", map[string]any{"Error": err}), map[string]any{"component": "main"})
 		}
 	}
 
@@ -122,7 +122,7 @@ func main() {
 	cfg, err := config.Load(*configFile)
 	if err == nil {
 		if setupErr := setupLogging(cfg); setupErr != nil {
-			util.Warn("Failed to set up initial logging configuration", "error", setupErr)
+			util.Warn("Failed to set up initial logging configuration", map[string]any{"component": "main", "error": setupErr})
 		}
 	}
 
@@ -130,16 +130,16 @@ func main() {
 	eventBus.Subscribe(event.ConfigUpdated, func(evt event.Event) {
 		if cfg, ok := evt.Data.(config.Config); ok {
 			if err := setupLogging(cfg); err != nil {
-				util.Error("Failed to update logging configuration", "error", err)
+				util.Error("Failed to update logging configuration", map[string]any{"component": "main", "error": err})
 			}
 		}
 	})
 
 	if err := application.Run(ctx); err != nil {
 		if util.IsExpectedError(err) {
-			util.Info(i18n.T("app_terminated", map[string]any{"Reason": "expected termination"}))
+			util.Info(i18n.T("app_terminated", map[string]any{"Reason": "expected termination"}), map[string]any{"component": "main"})
 		} else {
-			util.Error(i18n.T("app_error", map[string]any{"Error": err}))
+			util.Error(i18n.T("app_error", map[string]any{"Error": err}), map[string]any{"component": "main"})
 			os.Exit(1)
 		}
 	}

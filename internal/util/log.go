@@ -3,8 +3,10 @@ package util
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"os"
+	"strings"
 )
 
 type Logger struct {
@@ -39,39 +41,71 @@ func (l *Logger) With(args ...any) *Logger {
 	}
 }
 
-func (l *Logger) WithContext(ctx context.Context) *Logger {
+func (l *Logger) WithComponent(component string) *Logger {
 	return &Logger{
-		slogger: l.slogger,
+		slogger: l.slogger.With("component", component),
 	}
 }
 
-func (l *Logger) Debug(msg string, args ...any) {
-	l.slogger.Debug(msg, args...)
+func (l *Logger) Debug(msg string, fields map[string]any) {
+	if fields == nil {
+		l.slogger.Debug(msg)
+		return
+	}
+	l.slogger.Debug(msg, mapToAttrs(fields)...)
 }
 
-func (l *Logger) Info(msg string, args ...any) {
-	l.slogger.Info(msg, args...)
+func (l *Logger) Info(msg string, fields map[string]any) {
+	if fields == nil {
+		l.slogger.Info(msg)
+		return
+	}
+	l.slogger.Info(msg, mapToAttrs(fields)...)
 }
 
-func (l *Logger) Warn(msg string, args ...any) {
-	l.slogger.Warn(msg, args...)
+func (l *Logger) Warn(msg string, fields map[string]any) {
+	if fields == nil {
+		l.slogger.Warn(msg)
+		return
+	}
+	l.slogger.Warn(msg, mapToAttrs(fields)...)
 }
 
-func (l *Logger) Error(msg string, args ...any) {
-	l.slogger.Error(msg, args...)
+func (l *Logger) Error(msg string, fields map[string]any) {
+	if fields == nil {
+		l.slogger.Error(msg)
+		return
+	}
+	l.slogger.Error(msg, mapToAttrs(fields)...)
 }
 
 func (l *Logger) LogAttrs(level slog.Level, msg string, attrs ...slog.Attr) {
 	l.slogger.LogAttrs(context.Background(), level, msg, attrs...)
 }
 
-func (l *Logger) LogError(msg string, err error, args ...any) {
+func (l *Logger) LogError(msg string, err error, fields map[string]any) {
 	if err == nil {
 		return
 	}
 
-	allArgs := append([]any{"error", err}, args...)
-	l.slogger.Error(msg, allArgs...)
+	if fields == nil {
+		fields = make(map[string]any)
+	}
+	fields["error"] = err
+	l.Error(msg, fields)
+}
+
+// mapToAttrs converts a map of key-value pairs to slog attributes
+func mapToAttrs(fields map[string]any) []any {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	attrs := make([]any, 0, len(fields)*2)
+	for k, v := range fields {
+		attrs = append(attrs, k, v)
+	}
+	return attrs
 }
 
 var DefaultLogger = NewLogger(slog.LevelInfo, os.Stderr)
@@ -88,38 +122,28 @@ func InitDefaultLogger() {
 	DefaultLogger = NewLogger(slog.LevelInfo, os.Stderr)
 }
 
-func Debug(msg string, args ...any) {
-	DefaultLogger.Debug(msg, args...)
+func Debug(msg string, fields map[string]any) {
+	DefaultLogger.Debug(msg, fields)
 }
 
-func Info(msg string, args ...any) {
-	DefaultLogger.Info(msg, args...)
+func With(args ...any) *Logger {
+	return DefaultLogger.With(args...)
 }
 
-func InfoAttrs(msg string, attrs ...slog.Attr) {
-	DefaultLogger.LogAttrs(slog.LevelInfo, msg, attrs...)
+func Info(msg string, fields map[string]any) {
+	DefaultLogger.Info(msg, fields)
 }
 
-func Warn(msg string, args ...any) {
-	DefaultLogger.Warn(msg, args...)
+func Warn(msg string, fields map[string]any) {
+	DefaultLogger.Warn(msg, fields)
 }
 
-func Error(msg string, args ...any) {
-	DefaultLogger.Error(msg, args...)
+func Error(msg string, fields map[string]any) {
+	DefaultLogger.Error(msg, fields)
 }
 
-func LogError(msg string, err error, args ...any) {
-	DefaultLogger.LogError(msg, err, args...)
-}
-
-func LogErrorAttrs(msg string, err error, attrs ...slog.Attr) {
-	if err == nil {
-		return
-	}
-
-	errorAttr := slog.Any("error", err)
-	allAttrs := append([]slog.Attr{errorAttr}, attrs...)
-	DefaultLogger.LogAttrs(slog.LevelError, msg, allAttrs...)
+func LogError(msg string, err error, fields map[string]any) {
+	DefaultLogger.LogError(msg, err, fields)
 }
 
 func ParseLogLevel(level string) slog.Level {
@@ -136,3 +160,37 @@ func ParseLogLevel(level string) slog.Level {
 		return slog.LevelInfo
 	}
 }
+
+type WireGuardLogWriter struct {
+	logger *Logger
+	prefix string
+}
+
+func NewWireGuardLogWriter(logger *Logger, prefix string) *WireGuardLogWriter {
+	return &WireGuardLogWriter{
+		logger: logger,
+		prefix: prefix,
+	}
+}
+
+func (w *WireGuardLogWriter) Write(p []byte) (n int, err error) {
+	msg := strings.TrimSpace(string(p))
+	if msg == "" {
+		return len(p), nil
+	}
+
+	msg = strings.TrimPrefix(msg, w.prefix)
+	msg = strings.TrimSpace(msg)
+
+	if strings.Contains(msg, "ERROR") || strings.Contains(msg, "error") {
+		w.logger.Error("wireguard", map[string]any{"message": msg})
+	} else if strings.Contains(msg, "WARN") || strings.Contains(msg, "warn") {
+		w.logger.Warn("wireguard", map[string]any{"message": msg})
+	} else {
+		w.logger.Debug("wireguard", map[string]any{"message": msg})
+	}
+
+	return len(p), nil
+}
+
+var _ io.Writer = (*WireGuardLogWriter)(nil)
