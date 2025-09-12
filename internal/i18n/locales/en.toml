@@ -291,6 +291,9 @@ other = "Custom SSH key file path for registration (default uses system default)
 [genkey_error]
 other = "Failed to generate SSH key pair: {{.Error}}"
 
+[genkey_auto_success]
+other = "SSH key pair auto-generated at: {{.Path}}"
+
 
 [register_key_read_error]
 other = "Failed to read SSH public key: {{.Error}}"
