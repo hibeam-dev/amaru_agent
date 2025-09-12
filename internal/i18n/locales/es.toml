@@ -45,9 +45,6 @@ other = "Error al cargar la clave de autenticación: {{.Error}}"
 [ssh_dialing]
 other = "Conectando con el servidor amaru {{.Host}}:{{.Port}}..."
 
-[ssh_connection_established]
-other = "Conexión con el servidor amaru establecida"
-
 # Main application messages
 [i18n_init_error]
 other = "Advertencia: No se pudo inicializar la localización: {{.Error}}"
@@ -454,8 +451,17 @@ other = "Creando cliente WireGuard - puerto: {{.ListenPort}}, mtu: {{.MTU}}"
 [wireguard_client_starting]
 other = "Iniciando cliente WireGuard"
 
+[wireguard_client_started]
+other = "Cliente WireGuard iniciado exitosamente"
+
+[wireguard_client_established]
+other = "Conexión del cliente WireGuard establecida"
+
 [wireguard_registration_sending]
 other = "Enviando detalles de registro WireGuard"
+
+[wireguard_registration_sent]
+other = "Registro WireGuard enviado exitosamente"
 
 [wireguard_client_ip_obtained]
 other = "IP del cliente WireGuard obtenida: {{.ClientIP}}"
@@ -478,22 +484,10 @@ other = "Manejador de túnel WireGuard detenido"
 [wireguard_connection_alive]
 other = "Conexión WireGuard está activa"
 
-[wireguard_config_awaiting]
-other = "Esperando configuración WireGuard del servidor"
-
 [wireguard_config_parsed]
 other = "Configuración WireGuard parseada - endpoint: {{.Endpoint}}, pubkey: {{.PublicKey}}..."
 
-[wireguard_config_reading]
-other = "Leyendo configuración WireGuard del servidor"
-
-[wireguard_config_line_received]
-other = "Línea de configuración WireGuard recibida ({{.Length}} bytes)"
-
 # SSH debug messages
-[ssh_subsystem_requesting]
-other = "Solicitando subsistema SSH: {{.Subsystem}}"
-
 [ssh_subsystem_established]
 other = "Subsistema SSH establecido: {{.Subsystem}}"
 
@@ -518,23 +512,11 @@ other = "Timeout esperando configuración WireGuard del servidor ({{.Timeout}})"
 [wireguard_config_received_in_time]
 other = "Configuración WireGuard recibida dentro del timeout"
 
-[wireguard_registration_ssh_sending]
-other = "Enviando registro vía canal SSH"
-
 [wireguard_registration_ssh_failed]
 other = "Fallo al enviar registro vía SSH: {{.Error}}"
 
-[wireguard_registration_ssh_success]
-other = "Registro enviado vía SSH exitosamente"
-
-[wireguard_client_tunnel_ip_debug]
-other = "TunnelIP del cliente WireGuard: {{.TunnelIP}}"
-
 [wireguard_client_fallback_ip_debug]
 other = "IP de respaldo del cliente WireGuard: {{.FallbackIP}}"
-
-[wireguard_config_debug]
-other = "Configuración WireGuard: {{.Config}}"
 
 [wireguard_dial_error]
 other = "Falló al conectar a través del túnel WireGuard a {{.Address}}: {{.Error}}"

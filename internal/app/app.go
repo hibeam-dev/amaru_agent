@@ -139,7 +139,7 @@ func (a *App) stopServices(ctx context.Context) {
 			util.LogError(i18n.T("service_stop_error", map[string]any{
 				"Service": s.name,
 				"Error":   err,
-			}), err)
+			}), err, map[string]any{"component": "app"})
 		}
 	}
 }
@@ -200,13 +200,13 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 				delay := nextBackoffDelay()
 				util.Info(i18n.T("connection_reconnecting", map[string]any{
 					"Delay": delay.Truncate(time.Millisecond).String(),
-				}))
+				}), map[string]any{"component": "connection"})
 				time.AfterFunc(delay, a.triggerReconnect)
 			case event.ConnectionFailed:
 				delay := nextBackoffDelay()
 				util.Info(i18n.T("connection_reconnecting", map[string]any{
 					"Delay": delay.Truncate(time.Millisecond).String(),
-				}))
+				}), map[string]any{"component": "connection"})
 				time.AfterFunc(delay, a.triggerReconnect)
 			case event.ReconnectRequested:
 				a.triggerReconnect()

@@ -48,7 +48,7 @@ func RunMainLoop(ctx context.Context, conn transport.Connection, reconnectCh <-c
 	}
 
 	if err := g.Wait(); err != nil && !util.IsExpectedError(err) {
-		util.LogError("Error in main loop", err)
+		util.LogError("Error in main loop", err, map[string]any{"component": "protocol"})
 	}
 
 	return result
@@ -86,7 +86,7 @@ func readData(ctx context.Context, conn transport.Connection, errorCh chan<- err
 		}
 
 		if n > 0 {
-			util.Debug("Received bytes from transport", "bytes", n)
+			util.Debug("Received bytes from transport", map[string]any{"bytes": n, "component": "protocol"})
 		}
 	}
 }

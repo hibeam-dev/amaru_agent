@@ -114,9 +114,9 @@ func TestTranslation(t *testing.T) {
 		},
 		{
 			name:       "Translation with nil data",
-			messageID:  "ssh_connection_established",
+			messageID:  "connection_established",
 			data:       nil,
-			expected:   "SSH connection established",
+			expected:   "Connection established successfully",
 			shouldFail: false,
 		},
 	}

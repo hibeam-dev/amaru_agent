@@ -30,7 +30,7 @@ func WritePidFile() error {
 	util.Info(i18n.T("pid_file_written", map[string]any{
 		"Path": pidPath,
 		"PID":  pid,
-	}))
+	}), map[string]any{"component": "daemon"})
 
 	return nil
 }

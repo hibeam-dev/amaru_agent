@@ -24,7 +24,7 @@ func readStderr(ctx context.Context, conn transport.Connection) {
 			}
 
 			if n > 0 {
-				util.Debug("stderr output", "message", string(buffer[:n]))
+				util.Debug("stderr output", map[string]any{"message": string(buffer[:n]), "component": "protocol"})
 			}
 		}
 	}

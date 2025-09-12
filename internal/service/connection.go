@@ -203,11 +203,6 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 		return util.NewError(util.ErrTypeConnection, i18n.T("config_send_error", map[string]any{"Error": err}), err)
 	}
 
-	// Always expect WireGuard config response
-	util.Debug(i18n.T("wireguard_config_awaiting", map[string]any{
-		"type": "connection",
-	}))
-
 	wgConfig, err := s.receiveWireGuardConfigWithTimeout(conn, 60*time.Second)
 	if err != nil {
 		return util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_error", map[string]any{"Error": err}), err)
@@ -218,7 +213,7 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 		"Endpoint":  wgConfig.Endpoint,
 		"IP":        wgConfig.TunnelIP,
 		"PublicKey": wgConfig.PublicKey[:16] + "...",
-	}))
+	}), map[string]any{"component": "connection"})
 
 	// Store WireGuard config for proxy service
 	s.bus.Publish(event.Event{
@@ -231,14 +226,8 @@ func (s *ConnectionService) sendConfig(conn transport.Connection, cfg config.Con
 }
 
 func (s *ConnectionService) receiveWireGuardConfig(conn transport.Connection) (*WireGuardConfig, error) {
-	util.Debug(i18n.T("wireguard_config_reading", map[string]any{
-		"type": "connection",
-	}))
-
-	startTime := time.Now()
 	scanner := bufio.NewScanner(conn.Stdout())
 	scanner.Scan()
-	readDuration := time.Since(startTime)
 
 	if err := scanner.Err(); err != nil {
 		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_read_error", map[string]any{"Error": err}), err)
@@ -248,12 +237,6 @@ func (s *ConnectionService) receiveWireGuardConfig(conn transport.Connection) (*
 	if line == "" {
 		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_empty", map[string]any{}), nil)
 	}
-
-	util.Debug(i18n.T("wireguard_config_line_received", map[string]any{
-		"type":     "connection",
-		"Length":   len(line),
-		"Duration": readDuration.String(),
-	}))
 
 	var response struct {
 		Type      string           `json:"type"`
@@ -296,13 +279,13 @@ func (s *ConnectionService) receiveWireGuardConfigWithTimeout(conn transport.Con
 	case res := <-resultCh:
 		util.Debug(i18n.T("wireguard_config_received_in_time", map[string]any{
 			"type": "connection",
-		}))
+		}), map[string]any{"component": "connection"})
 		return res.config, res.err
 	case <-timer.C:
 		util.Debug(i18n.T("wireguard_config_timeout", map[string]any{
 			"type":    "connection",
 			"Timeout": timeout.String(),
-		}))
+		}), map[string]any{"component": "connection"})
 		return nil, util.NewError(util.ErrTypeConnection, i18n.T("wireguard_config_timeout_error", map[string]any{"Timeout": timeout}), nil)
 	}
 }
@@ -394,7 +377,7 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 					"type": "connection",
 					"Host": config.Connection.Host,
 					"Port": config.Connection.Port,
-				}))
+				}), map[string]any{"component": "connection"})
 
 				if err := s.Connect(ctx, config); err != nil {
 					reconnectDelay *= 2
@@ -406,12 +389,12 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 						"type":  "connection",
 						"Error": err,
 						"Delay": reconnectDelay.String(),
-					}), err)
+					}), err, map[string]any{"component": "connection"})
 				} else {
 					reconnectDelay = minReconnectDelay
 					util.Info(i18n.T("reconnection_successful", map[string]any{
 						"type": "connection",
-					}))
+					}), map[string]any{"component": "connection"})
 				}
 				continue
 			}
@@ -428,7 +411,7 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 				util.LogError(i18n.T("connection_health_check_failed", map[string]any{
 					"type":  "connection",
 					"Error": err,
-				}), err)
+				}), err, map[string]any{"component": "connection"})
 
 				_ = s.closeConnection(ctx)
 
@@ -439,11 +422,11 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 					util.LogError(i18n.T("immediate_reconnect_failed", map[string]any{
 						"type":  "connection",
 						"Error": err,
-					}), err)
+					}), err, map[string]any{"component": "connection"})
 				} else {
 					util.Info(i18n.T("immediate_reconnect_successful", map[string]any{
 						"type": "connection",
-					}))
+					}), map[string]any{"component": "connection"})
 				}
 			}
 		}
