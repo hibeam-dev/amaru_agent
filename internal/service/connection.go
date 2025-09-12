@@ -23,20 +23,6 @@ type ConnectionService struct {
 	monitorCancelFunc context.CancelFunc
 }
 
-type WireGuardConfig struct {
-	PrivateKey   string   `json:"private_key"`
-	PublicKey    string   `json:"public_key"`
-	Endpoint     string   `json:"endpoint"`
-	AllowedIPs   []string `json:"allowed_ips"`
-	PresharedKey string   `json:"preshared_key,omitempty"`
-	PersistentKA int      `json:"persistent_keepalive,omitempty"`
-	ListenPort   int      `json:"listen_port,omitempty"`
-	ServerPubKey string   `json:"server_public_key"`
-	DNS          string   `json:"dns,omitempty"`
-	MTU          int      `json:"mtu,omitempty"`
-	TunnelIP     string   `json:"tunnel_ip"`
-}
-
 func NewConnectionService(bus *event.Bus) *ConnectionService {
 	svc := &ConnectionService{}
 	svc.Service = NewService("connection", bus)

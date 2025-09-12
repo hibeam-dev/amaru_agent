@@ -140,7 +140,7 @@ func (s *ProxyService) handleWireGuardConfig(ctx context.Context, wgConfig *Wire
 		_ = s.wgClient.Stop()
 	}
 
-	clientConfig := &WireGuardClientConfig{
+	clientConfig := &WireGuardConfig{
 		PrivateKey:   wgConfig.PrivateKey,
 		PublicKey:    wgConfig.PublicKey,
 		Endpoint:     wgConfig.Endpoint,

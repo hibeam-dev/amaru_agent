@@ -82,7 +82,7 @@ func TestWireGuardProxyService(t *testing.T) {
 
 func TestWireGuardClientConfig(t *testing.T) {
 	t.Run("ClientConfigCreation", func(t *testing.T) {
-		config := &WireGuardClientConfig{
+		config := &WireGuardConfig{
 			PrivateKey:   "QH7bXDSBhNvHXnUXlFKi0Ks64a4I1j7E1K4Z4b8LfVs=",
 			PublicKey:    "d/t9p4J3A+J5A8lRO+dUEeO4hgd4JB8z5FE8eI6ZmWI=",
 			ServerPubKey: "m9RCGLWOgYkk0xqCuC5VlRKJQ6Hj4b7YXKjJYG8Q2Vs=",

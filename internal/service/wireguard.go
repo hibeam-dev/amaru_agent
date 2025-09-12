@@ -18,6 +18,20 @@ import (
 	"erlang-solutions.com/amaru_agent/internal/util"
 )
 
+type WireGuardConfig struct {
+	PrivateKey   string   `json:"private_key"`
+	PublicKey    string   `json:"public_key"`
+	Endpoint     string   `json:"endpoint"`
+	AllowedIPs   []string `json:"allowed_ips"`
+	PresharedKey string   `json:"preshared_key,omitempty"`
+	PersistentKA int      `json:"persistent_keepalive,omitempty"`
+	ListenPort   int      `json:"listen_port,omitempty"`
+	ServerPubKey string   `json:"server_public_key"`
+	DNS          string   `json:"dns,omitempty"`
+	MTU          int      `json:"mtu,omitempty"`
+	TunnelIP     string   `json:"tunnel_ip"`
+}
+
 type WireGuardClient struct {
 	device     *device.Device
 	tun        *netstack.Net
@@ -37,21 +51,7 @@ type WireGuardClient struct {
 	cancel     context.CancelFunc
 }
 
-type WireGuardClientConfig struct {
-	PrivateKey   string   `json:"private_key"`
-	PublicKey    string   `json:"public_key"`
-	Endpoint     string   `json:"endpoint"`
-	AllowedIPs   []string `json:"allowed_ips"`
-	PresharedKey string   `json:"preshared_key,omitempty"`
-	PersistentKA int      `json:"persistent_keepalive,omitempty"`
-	ListenPort   int      `json:"listen_port,omitempty"`
-	ServerPubKey string   `json:"server_public_key"`
-	DNS          string   `json:"dns,omitempty"`
-	MTU          int      `json:"mtu,omitempty"`
-	TunnelIP     string   `json:"tunnel_ip"`
-}
-
-func NewWireGuardClient(config *WireGuardClientConfig) (*WireGuardClient, error) {
+func NewWireGuardClient(config *WireGuardConfig) (*WireGuardClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	client := &WireGuardClient{
@@ -135,13 +135,11 @@ func (c *WireGuardClient) Start() error {
 
 	c.device = device.NewDevice(tun, conn.NewDefaultBind(), logger)
 
-	// Configure WireGuard device
 	config := fmt.Sprintf("private_key=%s\n", keyToHex(c.privateKey))
 	if c.listenPort > 0 {
 		config += fmt.Sprintf("listen_port=%d\n", c.listenPort)
 	}
 
-	// Add server peer
 	config += fmt.Sprintf("public_key=%s\n", keyToHex(c.serverKey))
 	config += fmt.Sprintf("endpoint=%s\n", c.endpoint)
 	config += fmt.Sprintf("persistent_keepalive_interval=%d\n", 25)
