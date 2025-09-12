@@ -95,7 +95,6 @@ func (l *Logger) LogError(msg string, err error, fields map[string]any) {
 	l.Error(msg, fields)
 }
 
-// mapToAttrs converts a map of key-value pairs to slog attributes
 func mapToAttrs(fields map[string]any) []any {
 	if len(fields) == 0 {
 		return nil
