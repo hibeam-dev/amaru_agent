@@ -97,6 +97,16 @@ func main() {
 			keyPath = *keyFile
 		} else {
 			keyPath = config.DefaultKeyFile() + ".pub"
+			if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+				generator := transport.NewEd25519Generator()
+				privateKeyPath := config.DefaultKeyFile()
+				_, genErr := generator.GenerateKey(privateKeyPath)
+				if genErr != nil {
+					util.Error(i18n.T("genkey_error", map[string]any{"Error": genErr}), map[string]any{"component": "main"})
+					os.Exit(1)
+				}
+				util.Info(i18n.T("genkey_auto_success", map[string]any{"Path": privateKeyPath}), map[string]any{"component": "main"})
+			}
 		}
 
 		registerClient := register.NewClient()

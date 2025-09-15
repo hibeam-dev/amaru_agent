@@ -285,6 +285,9 @@ other = "Ruta personalizada de archivo de clave SSH para registro (por defecto u
 [genkey_error]
 other = "Error al generar el par de claves SSH: {{.Error}}"
 
+[genkey_auto_success]
+other = "Par de claves SSH generado automáticamente en: {{.Path}}"
+
 
 [register_key_read_error]
 other = "Error al leer la clave pública SSH: {{.Error}}"
