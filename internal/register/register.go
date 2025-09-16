@@ -13,7 +13,7 @@ import (
 )
 
 type Client interface {
-	RegisterWithBackend(token string, publicKeyPath string, backendHost string) error
+	RegisterWithBackend(token string, publicKeyPath string, backendHost string, hostname string) error
 }
 
 type client struct{}
@@ -22,7 +22,7 @@ func NewClient() Client {
 	return &client{}
 }
 
-func (c *client) RegisterWithBackend(token string, publicKeyPath string, backendHost string) error {
+func (c *client) RegisterWithBackend(token string, publicKeyPath string, backendHost string, hostname string) error {
 	publicKey, err := readPublicKey(publicKeyPath)
 	if err != nil {
 		return fmt.Errorf("%s", i18n.T("register_key_read_error", map[string]any{"Error": err}))
@@ -31,6 +31,10 @@ func (c *client) RegisterWithBackend(token string, publicKeyPath string, backend
 	registrationData := map[string]string{
 		"token":  token,
 		"pubkey": string(publicKey),
+	}
+
+	if hostname != "" {
+		registrationData["hostname"] = hostname
 	}
 
 	jsonData, err := json.Marshal(registrationData)
