@@ -24,6 +24,7 @@ var (
 	genKey       = flag.Bool("genkey", false, "")
 	registerFlag = flag.String("register", "", "")
 	keyFile      = flag.String("key", "", "")
+	hostnameFlag = flag.String("hostname", "", "")
 )
 
 func init() {
@@ -38,6 +39,7 @@ func init() {
 		_, _ = fmt.Fprintf(w, "  -genkey\n    \t%s\n", i18n.T("flag_genkey_desc", map[string]any{}))
 		_, _ = fmt.Fprintf(w, "  -register %s\n    \t%s\n", "token", i18n.T("flag_register_desc", map[string]any{}))
 		_, _ = fmt.Fprintf(w, "  -key %s\n    \t%s\n", "filepath", i18n.T("flag_key_desc", map[string]any{}))
+		_, _ = fmt.Fprintf(w, "  -hostname %s\n    \t%s\n", "name", i18n.T("flag_hostname_desc", map[string]any{}))
 	}
 }
 
@@ -73,6 +75,11 @@ func main() {
 	registry.InitTransports()
 
 	flag.Parse()
+
+	if *hostnameFlag != "" && *registerFlag == "" {
+		util.Error(i18n.T("hostname_requires_register_error", map[string]any{}), map[string]any{"component": "main"})
+		os.Exit(1)
+	}
 
 	if *genKey {
 		generator := transport.NewEd25519Generator()
@@ -110,7 +117,7 @@ func main() {
 		}
 
 		registerClient := register.NewClient()
-		if err := registerClient.RegisterWithBackend(*registerFlag, keyPath, backendHost); err != nil {
+		if err := registerClient.RegisterWithBackend(*registerFlag, keyPath, backendHost, *hostnameFlag); err != nil {
 			util.Error(i18n.T("register_error", map[string]any{"Error": err}), map[string]any{"component": "main"})
 			os.Exit(1)
 		}

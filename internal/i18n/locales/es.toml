@@ -282,6 +282,12 @@ other = "Registrar clave pública SSH con el servidor backend usando token (pred
 [flag_key_desc]
 other = "Ruta personalizada de archivo de clave SSH para registro (por defecto usa el sistema predeterminado)"
 
+[flag_hostname_desc]
+other = "Dominio personalizado para registro (solo válido con -register)"
+
+[hostname_requires_register_error]
+other = "El flag -hostname solo se puede usar junto con el flag -register"
+
 [genkey_error]
 other = "Error al generar el par de claves SSH: {{.Error}}"
 

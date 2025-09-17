@@ -288,6 +288,12 @@ other = "Register public SSH key with backend server using token (default: app.a
 [flag_key_desc]
 other = "Custom SSH key file path for registration (default uses system default)"
 
+[flag_hostname_desc]
+other = "Custom domain for registration (only valid with -register)"
+
+[hostname_requires_register_error]
+other = "The -hostname flag can only be used together with the -register flag"
+
 [genkey_error]
 other = "Failed to generate SSH key pair: {{.Error}}"
 
