@@ -300,7 +300,6 @@ other = "Failed to generate SSH key pair: {{.Error}}"
 [genkey_auto_success]
 other = "SSH key pair auto-generated at: {{.Path}}"
 
-
 [register_key_read_error]
 other = "Failed to read SSH public key: {{.Error}}"
 
@@ -321,6 +320,9 @@ other = "Registration failed: {{.Error}}"
 
 [register_success]
 other = "SSH key registered successfully"
+
+[config_write_error]
+other = "Failed to write configuration file {{.Path}}: {{.Error}}"
 
 # Configuration validation messages
 [connection_host_missing]

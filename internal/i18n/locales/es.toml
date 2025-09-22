@@ -294,7 +294,6 @@ other = "Error al generar el par de claves SSH: {{.Error}}"
 [genkey_auto_success]
 other = "Par de claves SSH generado automáticamente en: {{.Path}}"
 
-
 [register_key_read_error]
 other = "Error al leer la clave pública SSH: {{.Error}}"
 
@@ -315,6 +314,9 @@ other = "Error en el registro: {{.Error}}"
 
 [register_success]
 other = "Clave SSH registrada exitosamente"
+
+[config_write_error]
+other = "Error al escribir el archivo de configuración {{.Path}}: {{.Error}}"
 
 # Configuration validation messages
 [connection_host_missing]
