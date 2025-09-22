@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	Subsystem = "cortex"
+	Subsystem = "amaru"
 	User      = "agent"
 )
 
