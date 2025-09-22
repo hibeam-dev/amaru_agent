@@ -117,8 +117,15 @@ func main() {
 		}
 
 		registerClient := register.NewClient()
-		if err := registerClient.RegisterWithBackend(*registerFlag, keyPath, backendHost, *hostnameFlag); err != nil {
+		configData, err := registerClient.RegisterWithBackend(*registerFlag, keyPath, backendHost, *hostnameFlag)
+		if err != nil {
 			util.Error(i18n.T("register_error", map[string]any{"Error": err}), map[string]any{"component": "main"})
+			os.Exit(1)
+		}
+
+		configFilePath := "config.toml"
+		if err := os.WriteFile(configFilePath, configData, 0644); err != nil {
+			util.Error(i18n.T("config_write_error", map[string]any{"Error": err, "Path": configFilePath}), map[string]any{"component": "main"})
 			os.Exit(1)
 		}
 
