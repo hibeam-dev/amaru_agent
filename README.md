@@ -9,8 +9,7 @@ proxy system.
 - TOML configuration with live reload
 - Background execution support
 - Internationalization (i18n) support
-- Automatic connection health monitoring
-- TCP/TLS tunneling for local application proxying
+- Wireguard tunneling for local application proxying
 
 ## Installation
 
@@ -44,7 +43,6 @@ make uninstall
 # Clone and setup
 git clone https://github.com/Erlang-Solutions/amaru_agent.git
 cd amaru_agent
-go mod download
 
 # Install linter (recommended)
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
@@ -68,7 +66,7 @@ make help
 ### Project Structure
 
 ```
-├── cmd/amaru_agent/    # Main entry point
+├── cmd/amaru/           # Main entry point
 ├── internal/            # Internal packages
 │   ├── app/             # Application core
 │   ├── config/          # Configuration
@@ -79,7 +77,7 @@ make help
 │   ├── registry/        # Transport registration
 │   ├── service/         # Business logic
 │   ├── ssh/             # SSH connection implementation
-│   ├── transport/       # Connection interfaces and abstractions
+│   ├── transport/       # Connection interfaces
 │   └── util/            # Shared utilities
 ├── Makefile             # Build automation
 └── config.toml          # Default config
@@ -107,26 +105,34 @@ make clean      # Clean artifacts
 
 ```bash
 # Basic usage
-./bin/amaru_agent
+./bin/amaru -h
+
+# Registration
+./bin/amaru -register $token
+./bin/amaru -register $token -hostname example.com
+./bin/amaru -register $token -key /path/to/custom/key.pub
 
 # With custom config
-./bin/amaru_agent -config=/path/to/config.toml
+./bin/amaru -config=/path/to/config.toml
 
 # Use Spanish language
-LANG=es_ES.UTF-8 ./bin/amaru_agent
+LANG=es_ES.UTF-8 ./bin/amaru
 
 # Generate SSH key pair
-./bin/amaru_agent -genkey > server_public_key.txt
+./bin/amaru -genkey > server_public_key.txt
 
 # Run in background
-nohup ./bin/amaru_agent -pid > /dev/null 2>&1 &
+nohup ./bin/amaru -pid > /dev/null 2>&1 &
 ```
 
 ### Command-line Options
 
-- `-config`: Config file path (default: config.toml)
-- `-genkey`: Generate SSH key pair and exit (keys stored in OS-specific location, existing keys backed up)
-- `-pid`: Write PID to ~/.amaru_agent/amaru_agent.pid
+- `-config`: Path to TOML configuration file (default: config.toml)
+- `-genkey`: Generate SSH key pair and exit
+- `-register`: Register public SSH key with backend server using token (default: app.amaru.cloud)
+- `-key`: Custom SSH key file path for registration (default uses system default)
+- `-hostname`: Custom domain for registration (only valid with -register)
+- `-pid`: Write PID file to ~/.amaru/amaru.pid
 
 ### Signal Handling
 

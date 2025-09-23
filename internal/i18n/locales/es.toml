@@ -262,13 +262,13 @@ other = "Error al detener el servicio de {{.Service}}: {{.Error}}"
 other = "Amaru Agent - Gestor de proxy remoto"
 
 [usage_format]
-other = "Uso: amaru_agent [opciones]"
+other = "Uso: amaru [opciones]"
 
 [options_header]
 other = "Opciones:"
 
 [flag_pid_desc]
-other = "Escribir archivo PID en ~/.amaru_agent/amaru_agent.pid"
+other = "Escribir archivo PID en ~/.amaru/amaru.pid"
 
 [flag_config_desc]
 other = "Ruta al archivo de configuración TOML (predeterminado: config.toml)"

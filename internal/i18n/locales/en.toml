@@ -268,13 +268,13 @@ other = "Error stopping {{.Service}} service: {{.Error}}"
 other = "Amaru Agent - Remote proxy manager"
 
 [usage_format]
-other = "Usage: amaru_agent [options]"
+other = "Usage: amaru [options]"
 
 [options_header]
 other = "Options:"
 
 [flag_pid_desc]
-other = "Write PID file to ~/.amaru_agent/amaru_agent.pid"
+other = "Write PID file to ~/.amaru/amaru.pid"
 
 [flag_config_desc]
 other = "Path to TOML configuration file (default: config.toml)"

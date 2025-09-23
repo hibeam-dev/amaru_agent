@@ -15,12 +15,12 @@ func WritePidFile() error {
 		return util.NewError(util.ErrTypeConfig, i18n.T("home_dir_error", map[string]any{}), err)
 	}
 
-	pidDir := filepath.Join(home, ".amaru_agent")
+	pidDir := filepath.Join(home, ".amaru")
 	if err := os.MkdirAll(pidDir, 0755); err != nil {
 		return util.NewError(util.ErrTypeConfig, i18n.T("pid_dir_create_error", map[string]any{}), err)
 	}
 
-	pidPath := filepath.Join(pidDir, "amaru_agent.pid")
+	pidPath := filepath.Join(pidDir, "amaru.pid")
 	pid := os.Getpid()
 
 	if err := os.WriteFile(pidPath, fmt.Appendf(nil, "%d", pid), 0644); err != nil {
