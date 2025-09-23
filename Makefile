@@ -1,7 +1,7 @@
 .PHONY: help build clean test lint mocks install uninstall vendor dev air
 
 GO ?= go
-BINARY_NAME=amaru_agent
+BINARY_NAME=amaru
 BUILD_DIR=bin
 VERSION ?= $(shell git describe --tags --always | sed 's/-/+/' | sed 's/^v//')
 LDFLAGS := -X "main.Version=$(VERSION)"
@@ -17,7 +17,7 @@ help: ## Show all available targets with descriptions
 build: ## Build application
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	@$(GO) build -v -ldflags '-s -w $(LDFLAGS)' -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/amaru_agent
+	@$(GO) build -v -ldflags '-s -w $(LDFLAGS)' -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/amaru
 
 install: build ## Install to $GOPATH/bin
 	@echo "Installing $(BINARY_NAME)..."

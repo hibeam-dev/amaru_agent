@@ -1,8 +1,10 @@
 version: 2
 
+project_name: amaru
+
 builds:
-  - main: ./cmd/amaru_agent
-    binary: amaru_agent
+  - main: ./cmd/amaru
+    binary: amaru
     goos:
       - linux
       - darwin

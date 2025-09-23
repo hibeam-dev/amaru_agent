@@ -32,7 +32,7 @@ func TestWritePidFile(t *testing.T) {
 		t.Fatalf("WritePidFile() failed: %v", err)
 	}
 
-	pidPath := filepath.Join(tmpDir, ".amaru_agent", "amaru_agent.pid")
+	pidPath := filepath.Join(tmpDir, ".amaru", "amaru.pid")
 	content, err := os.ReadFile(pidPath)
 	if err != nil {
 		t.Fatalf("Failed to read PID file: %v", err)
