@@ -21,7 +21,7 @@ jobs:
 
       - name: Create nightly tag
         run: |
-          TAG="nightly-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
+          TAG="nightly-$(date +'%Y%m%d')"
           echo "NIGHTLY_TAG=$TAG" >> $GITHUB_ENV
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
