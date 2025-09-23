@@ -10,21 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Full history for GoReleaser
+
       - uses: actions/setup-go@v4
         with:
           go-version: '1.25.1'
-      - name: Build binaries
-        run: |
-          mkdir -p dist
-          GOOS=linux GOARCH=amd64 go build -o dist/amaru_agent_linux_amd64 ./cmd/amaru_agent
-          GOOS=darwin GOARCH=amd64 go build -o dist/amaru_agent_darwin_amd64 ./cmd/amaru_agent
-          GOOS=darwin GOARCH=arm64 go build -o dist/amaru_agent_darwin_arm64 ./cmd/amaru_agent
-          GOOS=windows GOARCH=amd64 go build -o dist/amaru_agent_windows_amd64.exe ./cmd/amaru_agent
-      - name: Generate checksums
-        run: |
-          cd dist
-          sha256sum * > checksums.txt
-      - name: Release
-        uses: softprops/action-gh-release@v1
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v4
         with:
-          files: dist/*
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
