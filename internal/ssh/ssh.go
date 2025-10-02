@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"sync"
 
-	"erlang-solutions.com/amaru_agent/internal/config"
-	"erlang-solutions.com/amaru_agent/internal/i18n"
-	"erlang-solutions.com/amaru_agent/internal/transport"
-	"erlang-solutions.com/amaru_agent/internal/util"
+	"github.com/hibeam-dev/amaru_agent/internal/config"
+	"github.com/hibeam-dev/amaru_agent/internal/i18n"
+	"github.com/hibeam-dev/amaru_agent/internal/transport"
+	"github.com/hibeam-dev/amaru_agent/internal/util"
 	"golang.org/x/crypto/ssh"
 )
 

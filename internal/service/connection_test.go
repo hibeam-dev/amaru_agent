@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"erlang-solutions.com/amaru_agent/internal/config"
-	"erlang-solutions.com/amaru_agent/internal/event"
+	"github.com/hibeam-dev/amaru_agent/internal/config"
+	"github.com/hibeam-dev/amaru_agent/internal/event"
 )
 
 func TestConnectionService(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"erlang-solutions.com/amaru_agent/internal/config"
-	"erlang-solutions.com/amaru_agent/internal/transport"
+	"github.com/hibeam-dev/amaru_agent/internal/config"
+	"github.com/hibeam-dev/amaru_agent/internal/transport"
 )
 
 func TestConnClose(t *testing.T) {

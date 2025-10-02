@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"erlang-solutions.com/amaru_agent/internal/config"
-	"erlang-solutions.com/amaru_agent/internal/event"
+	"github.com/hibeam-dev/amaru_agent/internal/config"
+	"github.com/hibeam-dev/amaru_agent/internal/event"
 )
 
 type mockService struct {

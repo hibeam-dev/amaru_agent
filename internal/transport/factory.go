@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"erlang-solutions.com/amaru_agent/internal/config"
-	"erlang-solutions.com/amaru_agent/internal/util"
+	"github.com/hibeam-dev/amaru_agent/internal/config"
+	"github.com/hibeam-dev/amaru_agent/internal/util"
 )
 
 type ConnCreator interface {

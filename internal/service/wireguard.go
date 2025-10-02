@@ -14,8 +14,8 @@ import (
 	"golang.zx2c4.com/wireguard/tun/netstack"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	"erlang-solutions.com/amaru_agent/internal/i18n"
-	"erlang-solutions.com/amaru_agent/internal/util"
+	"github.com/hibeam-dev/amaru_agent/internal/i18n"
+	"github.com/hibeam-dev/amaru_agent/internal/util"
 )
 
 type WireGuardConfig struct {

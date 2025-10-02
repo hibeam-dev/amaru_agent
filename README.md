@@ -20,7 +20,7 @@ proxy system.
 ### Building from source
 
 ```bash
-git clone https://github.com/Erlang-Solutions/amaru_agent.git
+git clone https://github.com/hibeam-dev/amaru_agent.git
 cd amaru_agent
 make build
 ```
@@ -41,7 +41,7 @@ make uninstall
 
 ```bash
 # Clone and setup
-git clone https://github.com/Erlang-Solutions/amaru_agent.git
+git clone https://github.com/hibeam-dev/amaru_agent.git
 cd amaru_agent
 
 # Install linter (recommended)

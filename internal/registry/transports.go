@@ -1,7 +1,7 @@
 package registry
 
 import (
-	_ "erlang-solutions.com/amaru_agent/internal/ssh"
+	_ "github.com/hibeam-dev/amaru_agent/internal/ssh"
 )
 
 func InitTransports() {
