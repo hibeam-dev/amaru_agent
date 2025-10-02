@@ -6,9 +6,9 @@ import (
 	"runtime"
 	"time"
 
-	"erlang-solutions.com/amaru_agent/internal/i18n"
-	"erlang-solutions.com/amaru_agent/internal/util"
 	"github.com/BurntSushi/toml"
+	"github.com/hibeam-dev/amaru_agent/internal/i18n"
+	"github.com/hibeam-dev/amaru_agent/internal/util"
 )
 
 type Config struct {

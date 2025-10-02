@@ -7,15 +7,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"erlang-solutions.com/amaru_agent/internal/app"
-	"erlang-solutions.com/amaru_agent/internal/config"
-	"erlang-solutions.com/amaru_agent/internal/daemon"
-	"erlang-solutions.com/amaru_agent/internal/event"
-	"erlang-solutions.com/amaru_agent/internal/i18n"
-	"erlang-solutions.com/amaru_agent/internal/register"
-	"erlang-solutions.com/amaru_agent/internal/registry"
-	"erlang-solutions.com/amaru_agent/internal/transport"
-	"erlang-solutions.com/amaru_agent/internal/util"
+	"github.com/hibeam-dev/amaru_agent/internal/app"
+	"github.com/hibeam-dev/amaru_agent/internal/config"
+	"github.com/hibeam-dev/amaru_agent/internal/daemon"
+	"github.com/hibeam-dev/amaru_agent/internal/event"
+	"github.com/hibeam-dev/amaru_agent/internal/i18n"
+	"github.com/hibeam-dev/amaru_agent/internal/register"
+	"github.com/hibeam-dev/amaru_agent/internal/registry"
+	"github.com/hibeam-dev/amaru_agent/internal/transport"
+	"github.com/hibeam-dev/amaru_agent/internal/util"
 )
 
 var (

@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"erlang-solutions.com/amaru_agent/internal/i18n"
+	"github.com/hibeam-dev/amaru_agent/internal/i18n"
 )
 
 type KeyPair struct {

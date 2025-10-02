@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"erlang-solutions.com/amaru_agent/internal/i18n"
-	"erlang-solutions.com/amaru_agent/internal/util"
+	"github.com/hibeam-dev/amaru_agent/internal/i18n"
+	"github.com/hibeam-dev/amaru_agent/internal/util"
 )
 
 func WritePidFile() error {

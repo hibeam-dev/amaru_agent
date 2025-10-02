@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"erlang-solutions.com/amaru_agent/internal/event"
+	"github.com/hibeam-dev/amaru_agent/internal/event"
 )
 
 type MockServiceImpl struct {

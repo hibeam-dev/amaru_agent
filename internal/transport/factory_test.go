@@ -6,8 +6,8 @@ import (
 	"io"
 	"testing"
 
-	"erlang-solutions.com/amaru_agent/internal/config"
-	"erlang-solutions.com/amaru_agent/internal/util"
+	"github.com/hibeam-dev/amaru_agent/internal/config"
+	"github.com/hibeam-dev/amaru_agent/internal/util"
 	"maps"
 )
 

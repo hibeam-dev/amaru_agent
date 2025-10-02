@@ -1,4 +1,4 @@
-module erlang-solutions.com/amaru_agent
+module github.com/hibeam-dev/amaru_agent
 
 go 1.24.2
 

@@ -10,8 +10,8 @@ import (
 
 	"go.uber.org/mock/gomock"
 
-	"erlang-solutions.com/amaru_agent/internal/transport/mocks"
-	"erlang-solutions.com/amaru_agent/internal/util"
+	"github.com/hibeam-dev/amaru_agent/internal/transport/mocks"
+	"github.com/hibeam-dev/amaru_agent/internal/util"
 )
 
 type testReader struct {
