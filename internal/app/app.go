@@ -144,13 +144,13 @@ func (a *App) stopServices(ctx context.Context) {
 	}
 }
 
-func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
-	const (
-		checkInterval     = 100 * time.Millisecond
-		minReconnectDelay = 100 * time.Millisecond
-		maxReconnectDelay = 60 * time.Second
-	)
+var (
+	checkInterval     = 1 * time.Second
+	minReconnectDelay = 30 * time.Second
+	maxReconnectDelay = 60 * time.Second
+)
 
+func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 	var (
 		currentDelay = minReconnectDelay
 		backoffMu    sync.Mutex
@@ -196,13 +196,11 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 			switch evt.Type {
 			case event.ConnectionEstablished:
 				resetBackoffFn()
-			case event.ConnectionClosed:
-				delay := nextBackoffDelay()
-				util.Info(i18n.T("connection_reconnecting", map[string]any{
-					"Delay": delay.Truncate(time.Millisecond).String(),
-				}), map[string]any{"component": "connection"})
-				time.AfterFunc(delay, a.triggerReconnect)
-			case event.ConnectionFailed:
+			case event.ConnectionClosed, event.ConnectionFailed:
+				// Explicitly stop the connection service to clean up resources
+				stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				_ = a.connectionService.Stop(stopCtx)
 				delay := nextBackoffDelay()
 				util.Info(i18n.T("connection_reconnecting", map[string]any{
 					"Delay": delay.Truncate(time.Millisecond).String(),
