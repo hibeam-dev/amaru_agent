@@ -144,13 +144,13 @@ func (a *App) stopServices(ctx context.Context) {
 	}
 }
 
-func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
-	const (
-		checkInterval     = 1 * time.Second
-		minReconnectDelay = 30 * time.Second
-		maxReconnectDelay = 60 * time.Second
-	)
+var (
+	checkInterval     = 1 * time.Second
+	minReconnectDelay = 30 * time.Second
+	maxReconnectDelay = 60 * time.Second
+)
 
+func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 	var (
 		currentDelay = minReconnectDelay
 		backoffMu    sync.Mutex

@@ -292,6 +292,13 @@ func TestStopServices(t *testing.T) {
 	}
 }
 
+func init() {
+	// Override for testing
+	checkInterval = 100 * time.Millisecond
+	minReconnectDelay = 100 * time.Millisecond
+	maxReconnectDelay = 60 * time.Second
+}
+
 func TestRunWithReconnect(t *testing.T) {
 	t.Run("HandleTermination", func(t *testing.T) {
 		bus := newMockEventBus()
