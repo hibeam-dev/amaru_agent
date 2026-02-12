@@ -200,7 +200,7 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 				// Explicitly stop the connection service to clean up resources
 				stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				defer cancel()
-				a.connectionService.Stop(stopCtx)
+				_ = a.connectionService.Stop(stopCtx)
 				delay := nextBackoffDelay()
 				util.Info(i18n.T("connection_reconnecting", map[string]any{
 					"Delay": delay.Truncate(time.Millisecond).String(),
