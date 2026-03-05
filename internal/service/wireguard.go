@@ -8,6 +8,9 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"strings"
+	"strconv"
+	"time"
 
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
@@ -247,6 +250,25 @@ func (c *WireGuardClient) IsRunning() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.running
+}
+
+
+func (c *WireGuardClient) IsHealthy() bool {
+    status, err := c.device.IpcGet()
+    if err != nil {
+        return false
+    }
+
+    for _, line := range strings.Split(status, "\n") {
+        if strings.HasPrefix(line, "last_handshake_time_sec=") {
+            sec, err := strconv.ParseInt(strings.TrimSpace(strings.TrimPrefix(line, "last_handshake_time_sec=")), 10, 64)
+            if err != nil || sec == 0 {
+                continue
+            }
+            return time.Since(time.Unix(sec, 0)) < 1*time.Minute
+        }
+    }
+    return false
 }
 
 func (c *WireGuardClient) GetTunnelIP() string {

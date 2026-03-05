@@ -114,8 +114,6 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 		s.sshConn = nil
 		s.connectionMu.Unlock()
 
-		s.bus.Publish(event.Event{Type: event.WireGuardDisconnected, Ctx: s.Context()})
-
 	case event.WireGuardConfigReceived:
 		if wgConfig, ok := evt.Data.(*WireGuardConfig); ok {
 			s.handleWireGuardConfig(s.Context(), wgConfig)
@@ -381,9 +379,12 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 		case <-ticker.C:
 			s.connectionMu.RLock()
 			isRunning := s.wgClient != nil && s.wgClient.IsRunning()
+			IsHealthy := s.wgClient.IsHealthy()
 			s.connectionMu.RUnlock()
 
-			if !isRunning {
+			fmt.Printf("Healthy: %b\n", IsHealthy)
+
+			if !isRunning || !IsHealthy {
 				util.Warn(i18n.T("wireguard_connection_lost", map[string]any{
 					"type": "proxy",
 				}), map[string]any{"component": "proxy"})

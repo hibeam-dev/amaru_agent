@@ -37,7 +37,24 @@ func (s *ConnectionService) Start(ctx context.Context) error {
 	unsub := s.bus.Subscribe(event.ConfigUpdated, s.handleConfigEvent)
 	s.AddSubscription(unsub)
 
+	wgUnsub := s.bus.Subscribe(event.WireGuardDisconnected, s.handleWireGuardDisconnected)
+	s.AddSubscription(wgUnsub)
+
 	return nil
+}
+
+func (s *ConnectionService) handleWireGuardDisconnected(evt event.Event) {
+	if evt.Type != event.WireGuardDisconnected {
+		return
+	}
+
+	util.Info(i18n.T("wireguard_disconnected_full_reconnect", map[string]any{
+		"type": "connection",
+	}), map[string]any{"component": "connection"})
+
+	// Closing the SSH connection sets s.connection = nil,
+	// which the monitor loop will detect and trigger a full reconnect
+ 	_ = s.closeConnection(s.Context())
 }
 
 func (s *ConnectionService) Stop(ctx context.Context) error {
