@@ -387,6 +387,8 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 			if !isRunning || !IsHealthy {
 				util.Warn(i18n.T("wireguard_connection_lost", map[string]any{
 					"type": "proxy",
+					"isRunning": isRunning,
+					"IsHealthy": IsHealthy,
 				}), map[string]any{"component": "proxy"})
 				s.bus.Publish(event.Event{Type: event.WireGuardDisconnected, Ctx: ctx})
 				return

@@ -254,21 +254,29 @@ func (c *WireGuardClient) IsRunning() bool {
 
 
 func (c *WireGuardClient) IsHealthy() bool {
-    status, err := c.device.IpcGet()
-    if err != nil {
-        return false
-    }
+	status, err := c.device.IpcGet()
+	if err != nil {
+	    return false
+	}
 
-    for _, line := range strings.Split(status, "\n") {
-        if strings.HasPrefix(line, "last_handshake_time_sec=") {
-            sec, err := strconv.ParseInt(strings.TrimSpace(strings.TrimPrefix(line, "last_handshake_time_sec=")), 10, 64)
-            if err != nil || sec == 0 {
-                continue
-            }
-            return time.Since(time.Unix(sec, 0)) < 1*time.Minute
-        }
-    }
-    return false
+	for _, line := range strings.Split(status, "\n") {
+		
+		if strings.HasPrefix(line, "last_handshake_time_sec=") {
+			sec, err := strconv.ParseInt(strings.TrimSpace(strings.TrimPrefix(line, "last_handshake_time_sec=")), 10, 64)
+			if err != nil || sec == 0 {
+				continue
+			}
+			fmt.Printf("wg: %s\n", line)
+			fmt.Printf("now=%d\n", time.Since(time.Unix(sec, 0)))
+			
+			// The threshold MUST be greater than RekeyAfterTime (120s), which is the interval at which
+			// WireGuard renegotiates the session when traffic is flowing.
+			// https://github.com/WireGuard/wireguard-go/blob/f333402bd9cbe0f3eeb02507bd14e23d7d639280/device/constants.go#L17
+			//return time.Since(time.Unix(sec, 0)) < (3 * time.Minute)
+			return time.Since(time.Unix(sec, 0)) < (40 * time.Second)
+		}
+	}
+	return false
 }
 
 func (c *WireGuardClient) GetTunnelIP() string {
