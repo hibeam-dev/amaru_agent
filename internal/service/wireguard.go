@@ -94,6 +94,7 @@ func NewWireGuardClient(config *WireGuardConfig) (*WireGuardClient, error) {
 }
 
 func (c *WireGuardClient) Start() error {
+	fmt.Printf("WireGuardClient() Start\n")
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -254,6 +255,13 @@ func (c *WireGuardClient) IsRunning() bool {
 
 
 func (c *WireGuardClient) IsHealthy() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+    if !c.running || c.device == nil {
+        return false
+    }
+
 	status, err := c.device.IpcGet()
 	if err != nil {
 	    return false
@@ -273,7 +281,7 @@ func (c *WireGuardClient) IsHealthy() bool {
 			// WireGuard renegotiates the session when traffic is flowing.
 			// https://github.com/WireGuard/wireguard-go/blob/f333402bd9cbe0f3eeb02507bd14e23d7d639280/device/constants.go#L17
 			//return time.Since(time.Unix(sec, 0)) < (3 * time.Minute)
-			return time.Since(time.Unix(sec, 0)) < (40 * time.Second)
+			return time.Since(time.Unix(sec, 0)) < (10 * time.Second)
 		}
 	}
 	return false
