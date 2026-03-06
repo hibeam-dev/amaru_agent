@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
+	"fmt"
 
 	"github.com/hibeam-dev/amaru_agent/internal/config"
 	"github.com/hibeam-dev/amaru_agent/internal/event"
@@ -30,6 +31,7 @@ func NewConnectionService(bus *event.Bus) *ConnectionService {
 }
 
 func (s *ConnectionService) Start(ctx context.Context) error {
+	fmt.Printf("ConnectionService() Start\n")
 	if err := s.Service.Start(ctx); err != nil {
 		return err
 	}
@@ -37,7 +39,25 @@ func (s *ConnectionService) Start(ctx context.Context) error {
 	unsub := s.bus.Subscribe(event.ConfigUpdated, s.handleConfigEvent)
 	s.AddSubscription(unsub)
 
+	wgUnsub := s.bus.Subscribe(event.WireGuardDisconnected, s.handleWireGuardDisconnected)
+	s.AddSubscription(wgUnsub)
+
 	return nil
+}
+
+func (s *ConnectionService) handleWireGuardDisconnected(evt event.Event) {
+	fmt.Printf("handleWireGuardDisconnected()\n")
+	if evt.Type != event.WireGuardDisconnected {
+		return
+	}
+
+	util.Info(i18n.T("wireguard_disconnected_full_reconnect", map[string]any{
+		"type": "connection",
+	}), map[string]any{"component": "connection"})
+
+	// Closing the SSH connection sets s.connection = nil,
+	// which the monitor loop will detect and trigger a full reconnect
+ 	_ = s.closeConnection(evt.Ctx)
 }
 
 func (s *ConnectionService) Stop(ctx context.Context) error {
@@ -99,13 +119,13 @@ func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) erro
 		s.runConnectionLoop(ctx)
 	}(ctx)
 
-	monitorCtx, cancelMonitor := context.WithCancel(ctx)
-	s.monitorCancelFunc = cancelMonitor
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		s.monitorConnection(monitorCtx)
-	}()
+	//monitorCtx, cancelMonitor := context.WithCancel(ctx)
+	//s.monitorCancelFunc = cancelMonitor
+	//s.wg.Add(1)
+	//go func() {
+	//	defer s.wg.Done()
+	//	s.monitorConnection(monitorCtx)
+	//}()
 
 	return nil
 }
@@ -352,6 +372,7 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 			s.connectionMu.RUnlock()
 
 			if !haveConnection {
+				fmt.Printf("Needs reconnect ---------\n")
 				now := time.Now()
 				if now.Sub(lastReconnectAttempt) < reconnectDelay {
 					continue
@@ -365,6 +386,7 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 					"Port": config.Connection.Port,
 				}), map[string]any{"component": "connection"})
 
+				fmt.Printf("s.Connect 1\n")
 				if err := s.Connect(ctx, config); err != nil {
 					reconnectDelay *= 2
 					if reconnectDelay > maxReconnectDelay {
@@ -404,6 +426,7 @@ func (s *ConnectionService) monitorConnection(ctx context.Context) {
 				lastReconnectAttempt = time.Now()
 				reconnectDelay = minReconnectDelay
 
+					fmt.Printf("s.Connect 2\n")
 				if err := s.Connect(ctx, config); err != nil {
 					util.LogError(i18n.T("immediate_reconnect_failed", map[string]any{
 						"type":  "connection",

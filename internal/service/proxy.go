@@ -35,6 +35,7 @@ func NewProxyService(bus *event.Bus) *ProxyService {
 }
 
 func (s *ProxyService) Start(ctx context.Context) error {
+	fmt.Printf("Proxy Start()\n")
 	if err := s.Service.Start(ctx); err != nil {
 		return err
 	}
@@ -92,6 +93,7 @@ func (s *ProxyService) handleConfigEvent(evt event.Event) {
 }
 
 func (s *ProxyService) handleConnectionEvents(evt event.Event) {
+	fmt.Printf("handleConnectionEvents(%s)\n", evt.Type)
 	switch evt.Type {
 	case event.ConnectionEstablished:
 		if conn, ok := evt.Data.(transport.Connection); ok {
@@ -114,8 +116,6 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 		s.sshConn = nil
 		s.connectionMu.Unlock()
 
-		s.bus.Publish(event.Event{Type: event.WireGuardDisconnected, Ctx: s.Context()})
-
 	case event.WireGuardConfigReceived:
 		if wgConfig, ok := evt.Data.(*WireGuardConfig); ok {
 			s.handleWireGuardConfig(s.Context(), wgConfig)
@@ -124,6 +124,7 @@ func (s *ProxyService) handleConnectionEvents(evt event.Event) {
 }
 
 func (s *ProxyService) handleWireGuardConfig(ctx context.Context, wgConfig *WireGuardConfig) {
+	fmt.Printf("handleWireGuardConfig()\n")
 	util.Debug(i18n.T("wireguard_config_received", map[string]any{
 		"type":      "proxy",
 		"Endpoint":  wgConfig.Endpoint,
@@ -305,6 +306,8 @@ func (s *ProxyService) sendRegistrationDetailsWithConnections(sshConn transport.
 }
 
 func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
+    fmt.Printf("handleTunnelRequests()\n")
+
 	util.Debug(i18n.T("wireguard_tunnel_handler_started", map[string]any{
 		"type": "proxy",
 	}), map[string]any{"component": "proxy"})
@@ -338,7 +341,11 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 		}), err, map[string]any{"component": "proxy"})
 		return
 	}
-	defer func() { _ = listener.Close() }()
+
+	defer func() { 
+		fmt.Printf("listener.Close()\n")
+		_ = listener.Close() 
+	}()
 
 	util.Info(i18n.T("wireguard_tunnel_listener_started", map[string]any{
 		"type": "proxy",
@@ -348,6 +355,7 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 	// Accept connections in a goroutine
 	go func() {
 		for {
+			fmt.Printf("listener.Accept()\n")
 			conn, err := listener.Accept()
 			if err != nil {
 				select {
@@ -358,10 +366,13 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 						"type":  "proxy",
 						"Error": err,
 					}), err, map[string]any{"component": "proxy"})
-					continue
+
+					fmt.Printf("############### ERROR ###############\n")
+					return
 				}
 			}
 
+			fmt.Printf("############### SUCCESS ###############\n")
 			// Handle each connection in a separate goroutine
 			go s.handleTunnelConnection(ctx, conn, localAddr)
 		}
@@ -381,12 +392,18 @@ func (s *ProxyService) handleTunnelRequests(ctx context.Context) {
 		case <-ticker.C:
 			s.connectionMu.RLock()
 			isRunning := s.wgClient != nil && s.wgClient.IsRunning()
+			IsHealthy := s.wgClient.IsHealthy()
 			s.connectionMu.RUnlock()
 
-			if !isRunning {
+			fmt.Printf("Healthy: %b\n", IsHealthy)
+
+			if !isRunning || !IsHealthy {
 				util.Warn(i18n.T("wireguard_connection_lost", map[string]any{
 					"type": "proxy",
+					"isRunning": isRunning,
+					"IsHealthy": IsHealthy,
 				}), map[string]any{"component": "proxy"})
+				fmt.Printf("s.bus.Publish WireGuardDisconnected\n")
 				s.bus.Publish(event.Event{Type: event.WireGuardDisconnected, Ctx: ctx})
 				return
 			} else {
