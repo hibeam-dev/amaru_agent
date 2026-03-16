@@ -94,7 +94,6 @@ func NewWireGuardClient(config *WireGuardConfig) (*WireGuardClient, error) {
 }
 
 func (c *WireGuardClient) Start() error {
-	fmt.Printf("WireGuardClient() Start\n")
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -273,15 +272,11 @@ func (c *WireGuardClient) IsHealthy() bool {
 			sec, err := strconv.ParseInt(strings.TrimSpace(strings.TrimPrefix(line, "last_handshake_time_sec=")), 10, 64)
 			if err != nil || sec == 0 {
 				continue
-			}
-			fmt.Printf("wg: %s\n", line)
-			fmt.Printf("now=%d\n", time.Since(time.Unix(sec, 0)))
-			
+			}		
 			// The threshold MUST be greater than RekeyAfterTime (120s), which is the interval at which
 			// WireGuard renegotiates the session when traffic is flowing.
 			// https://github.com/WireGuard/wireguard-go/blob/f333402bd9cbe0f3eeb02507bd14e23d7d639280/device/constants.go#L17
-			//return time.Since(time.Unix(sec, 0)) < (3 * time.Minute)
-			return time.Since(time.Unix(sec, 0)) < (10 * time.Second)
+			return time.Since(time.Unix(sec, 0)) < (3 * time.Minute)
 		}
 	}
 	return false

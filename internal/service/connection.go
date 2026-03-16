@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
-	"fmt"
 
 	"github.com/hibeam-dev/amaru_agent/internal/config"
 	"github.com/hibeam-dev/amaru_agent/internal/event"
@@ -31,7 +30,6 @@ func NewConnectionService(bus *event.Bus) *ConnectionService {
 }
 
 func (s *ConnectionService) Start(ctx context.Context) error {
-	fmt.Printf("ConnectionService() Start\n")
 	if err := s.Service.Start(ctx); err != nil {
 		return err
 	}
@@ -46,7 +44,6 @@ func (s *ConnectionService) Start(ctx context.Context) error {
 }
 
 func (s *ConnectionService) handleWireGuardDisconnected(evt event.Event) {
-	fmt.Printf("handleWireGuardDisconnected()\n")
 	if evt.Type != event.WireGuardDisconnected {
 		return
 	}
@@ -118,14 +115,6 @@ func (s *ConnectionService) Connect(ctx context.Context, cfg config.Config) erro
 		defer s.wg.Done()
 		s.runConnectionLoop(ctx)
 	}(ctx)
-
-	//monitorCtx, cancelMonitor := context.WithCancel(ctx)
-	//s.monitorCancelFunc = cancelMonitor
-	//s.wg.Add(1)
-	//go func() {
-	//	defer s.wg.Done()
-	//	s.monitorConnection(monitorCtx)
-	//}()
 
 	return nil
 }
@@ -346,98 +335,4 @@ func (s *ConnectionService) runProtocolMode(ctx context.Context, conn transport.
 	}
 
 	return nil
-}
-
-func (s *ConnectionService) monitorConnection(ctx context.Context) {
-	const (
-		healthCheckInterval = 5 * time.Second
-		minReconnectDelay   = 1 * time.Second
-		maxReconnectDelay   = 30 * time.Second
-	)
-
-	ticker := time.NewTicker(healthCheckInterval)
-	defer ticker.Stop()
-
-	var reconnectDelay = minReconnectDelay
-	var lastReconnectAttempt time.Time
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.connectionMu.RLock()
-			haveConnection := s.connection != nil
-			config := s.config
-			s.connectionMu.RUnlock()
-
-			if !haveConnection {
-				fmt.Printf("Needs reconnect ---------\n")
-				now := time.Now()
-				if now.Sub(lastReconnectAttempt) < reconnectDelay {
-					continue
-				}
-
-				lastReconnectAttempt = now
-
-				util.Info(i18n.T("attempting_reconnection", map[string]any{
-					"type": "connection",
-					"Host": config.Connection.Host,
-					"Port": config.Connection.Port,
-				}), map[string]any{"component": "connection"})
-
-				fmt.Printf("s.Connect 1\n")
-				if err := s.Connect(ctx, config); err != nil {
-					reconnectDelay *= 2
-					if reconnectDelay > maxReconnectDelay {
-						reconnectDelay = maxReconnectDelay
-					}
-
-					util.LogError(i18n.T("reconnection_failed", map[string]any{
-						"type":  "connection",
-						"Error": err,
-						"Delay": reconnectDelay.String(),
-					}), err, map[string]any{"component": "connection"})
-				} else {
-					reconnectDelay = minReconnectDelay
-					util.Info(i18n.T("reconnection_successful", map[string]any{
-						"type": "connection",
-					}), map[string]any{"component": "connection"})
-				}
-				continue
-			}
-
-			s.connectionMu.RLock()
-			conn := s.connection
-			s.connectionMu.RUnlock()
-
-			checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-			err := conn.CheckHealth(checkCtx)
-			cancel()
-
-			if err != nil {
-				util.LogError(i18n.T("connection_health_check_failed", map[string]any{
-					"type":  "connection",
-					"Error": err,
-				}), err, map[string]any{"component": "connection"})
-
-				_ = s.closeConnection(ctx)
-
-				lastReconnectAttempt = time.Now()
-				reconnectDelay = minReconnectDelay
-
-					fmt.Printf("s.Connect 2\n")
-				if err := s.Connect(ctx, config); err != nil {
-					util.LogError(i18n.T("immediate_reconnect_failed", map[string]any{
-						"type":  "connection",
-						"Error": err,
-					}), err, map[string]any{"component": "connection"})
-				} else {
-					util.Info(i18n.T("immediate_reconnect_successful", map[string]any{
-						"type": "connection",
-					}), map[string]any{"component": "connection"})
-				}
-			}
-		}
-	}
 }

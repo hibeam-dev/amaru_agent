@@ -239,9 +239,9 @@ func (a *App) runWithReconnect(ctx context.Context, terminated *bool) error {
 
 			if !a.connectionService.HasConnection() {
 				cfg := a.connectionService.GetConfig()
-				// TODO: Check with Ricardo this approach
+				// NOTE: During the reconnection, the subscriptions need to be re-established since
+				//       the previous context was terminated
 				_ = a.connectionService.Start(ctx)
-				fmt.Printf("a.connectionService.Connect()\n")
 				if err := a.connectionService.Connect(ctx, cfg); err != nil {
 					delay := nextBackoffDelay()
 					ticker.Reset(delay)
