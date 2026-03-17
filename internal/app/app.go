@@ -91,6 +91,15 @@ func (a *App) Run(ctx context.Context) error {
 	})
 	defer a.eventBus.Unsubscribe(terminationSub)
 
+	// Subscribe at app level — survives connection restarts
+	wgUnsub := a.eventBus.Subscribe(event.WireGuardDisconnected, func(evt event.Event) {
+	 	a.eventBus.Publish(event.Event{
+	 		Type: event.ConnectionFailed,
+	 		Ctx:  evt.Ctx,
+	 	})
+	})
+    defer a.eventBus.Unsubscribe(wgUnsub)
+
 	return a.runWithReconnect(mainCtx, &terminationReceived)
 }
 
